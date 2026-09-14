@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "replicate": {
+      "command": "node",
+      "args": ["scripts/mcp/replicate-asset-server.mjs"],
+      "env": {
+        "NODE_USE_ENV_PROXY": "1",
+        "NODE_EXTRA_CA_CERTS": "/root/.ccr/ca-bundle.crt",
+        "REPLICATE_API_TOKEN": "${REPLICATE_API_TOKEN}",
+        "REPLICATE_ASSET_MODEL": "${REPLICATE_ASSET_MODEL:-black-forest-labs/flux-1.1-pro}"
+      }
+    }
+  }
+}
