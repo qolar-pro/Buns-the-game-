@@ -6,315 +6,30 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SpriteColliderGenerator, CollisionLayer, ColliderShape, Point } from '../lib/SpriteCollider';
 import { soundManager } from '../lib/SoundManager';
 import { debug, debugError } from '@/lib/debug';
-
-const PLAYER_SIZE = 128;
-const PLAYER_SPEED = 5.0;
-
-// Colors
-const TREE_TRUNK = '#3e2723';
-const ROCK_COLOR = '#5a5a5a';
-const ROCK_SIZE = 64;
-const GLOBAL_ASSET_SCALE = 1.0;
-const CHUNK_SIZE = 1024;
-const INVENTORY_SLOTS = 36;
-const HOTBAR_SLOTS = 9;
-const MAIN_INV_ROWS = 3;
-const MAIN_INV_COLS = 9;
-const SLOT_SIZE = 50;
-const SLOT_MARGIN = 10;
-const MAX_HUNGER = 10;
-
-const SMELT_RECIPES: Record<string, string> = {
-  'raw_beef': 'cooked_beef',
-  'raw_pork': 'cooked_pork',
-  'mutton': 'cooked_mutton',
-  'raw_chicken': 'cooked_chicken',
-  'scrap_metal': 'copper_wiring',
-  'iron_ore': 'iron_ingot',
-};
-
-const FUEL_VALUES: Record<string, number> = {
-  'wood': 900, // 15 seconds at 60fps
-  'coal': 3600, // 60 seconds
-  'stick': 300 // 5 seconds
-};
-
-const SMELT_TIME = 600; // 10 seconds to smelt
+import {
+  PLAYER_SIZE, PLAYER_SPEED, TREE_TRUNK, ROCK_COLOR, ROCK_SIZE, GLOBAL_ASSET_SCALE,
+  CHUNK_SIZE, INVENTORY_SLOTS, HOTBAR_SLOTS, MAIN_INV_ROWS, MAIN_INV_COLS,
+  SLOT_SIZE, SLOT_MARGIN, MAX_HUNGER, SMELT_RECIPES, FUEL_VALUES, SMELT_TIME,
+} from '@/src/game/core/config';
+import { reseedNoise, noise2D, fbm, hash } from '@/src/game/world/noise';
+import { CRAFTING_RECIPES } from '@/src/game/core/recipes';
+import {
+  addToInventory as invAdd,
+  removeFromInventory as invRemove,
+  hasIngredients as invHas,
+} from '@/src/game/systems/inventory';
+import { craftItem as craft } from '@/src/game/systems/crafting';
+import { updateSmelting } from '@/src/game/systems/smelting';
+import type {
+  EntityType, ItemType, Ingredient, Recipe, EquipmentSlotName, Equipment,
+  AnimalType, AnimalState, Animal, InventorySlot, Resource, Enemy, DroppedItem,
+  RenderEntity, Particle, GameState,
+} from '@/src/game/core/types';
 
 
 // Deterministic Noise Functions
-let currentWorldSeed = 42;
 
-const hash = (x: number, y: number) => {
-  let h = (x * 374761393 + y * 668265263 + currentWorldSeed * 123456789) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return (h ^ (h >>> 16)) >>> 0;
-};
 
-// Optimized Noise with Permutation Table
-const P = new Uint8Array(512);
-const p = new Uint8Array(256);
-
-const reseedNoise = (seed: number) => {
-  currentWorldSeed = seed;
-  for (let i = 0; i < 256; i++) p[i] = i;
-  
-  let s = seed;
-  for (let i = 255; i > 0; i--) {
-    s = (s * 16807) % 2147483647;
-    const r = (s - 1) % (i + 1);
-    [p[i], p[r]] = [p[r], p[i]];
-  }
-  for (let i = 0; i < 512; i++) P[i] = p[i & 255];
-};
-
-// Initial seed
-reseedNoise(42);
-
-const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
-const lerp = (t: number, a: number, b: number) => a + t * (b - a);
-
-const noise2D = (x: number, y: number) => {
-  const X = Math.floor(x) & 255;
-  const Y = Math.floor(y) & 255;
-  const xf = x - Math.floor(x);
-  const yf = y - Math.floor(y);
-  const u = fade(xf);
-  const v = fade(yf);
-  
-  const a = P[X] + Y;
-  const b = P[X + 1] + Y;
-  
-  const aa = P[a] / 255;
-  const ba = P[b] / 255;
-  const ab = P[a + 1] / 255;
-  const bb = P[b + 1] / 255;
-
-  return lerp(v, lerp(u, aa, ba), lerp(u, ab, bb));
-};
-
-const fbm = (x: number, y: number, octaves = 3) => {
-  let val = 0;
-  let amp = 0.5;
-  let freq = 1;
-  for (let i = 0; i < octaves; i++) {
-    val += noise2D(x * freq, y * freq) * amp;
-    amp *= 0.5;
-    freq *= 2;
-  }
-  return val;
-};
-
-type EntityType = 'tree' | 'rock' | 'bush' | 'sapling' | 'trunk' | 'coal_ore' | 'torch' | 'workbench' | 'campfire' | 'branch' | 'small_rock' | 'grass' | 'bed' | 'chest' | 'furnace' | 'antenna' | 'fence' | 'iron_ore';
-type ItemType = 'wood' | 'stone' | 'sapling' | 'coal' | 'stick' | 'workbench' | 'campfire' | 'torch' | 'wheat_seeds' | 'wooden_axe' | 'wooden_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'wooden_sword' | 'stone_sword' | 'raw_beef' | 'leather' | 'raw_pork' | 'mutton' | 'wool' | 'raw_chicken' | 'feather' | 'egg' | 'bed' | 'leather_cap' | 'leather_tunic' | 'leather_pants' | 'leather_boots' | 'leather_backpack' | 'chest' | 'furnace' | 'cooked_beef' | 'cooked_pork' | 'cooked_mutton' | 'cooked_chicken' | 'scrap_metal' | 'copper_wiring' | 'iron_ingot' | 'iron_axe' | 'iron_pickaxe' | 'iron_sword' | 'antenna' | 'fence' | 'bread' | 'meat_pie' | 'omelet' | 'wheat';
-
-interface Ingredient {
-  type: ItemType;
-  count: number;
-}
-
-interface Recipe {
-  id: string;
-  output: ItemType;
-  count: number;
-  ingredients: Ingredient[];
-  requiresWorkbench?: boolean;
-}
-
-const CRAFTING_RECIPES: Recipe[] = [
-  { id: 'stick', output: 'stick', count: 4, ingredients: [{ type: 'wood', count: 1 }] },
-  { id: 'workbench', output: 'workbench', count: 1, ingredients: [{ type: 'wood', count: 10 }] },
-  { id: 'furnace', output: 'furnace', count: 1, ingredients: [{ type: 'stone', count: 15 }] },
-  { id: 'chest', output: 'chest', count: 1, ingredients: [{ type: 'wood', count: 12 }] },
-  { id: 'torch', output: 'torch', count: 4, ingredients: [{ type: 'stick', count: 1 }, { type: 'coal', count: 1 }] },
-  { id: 'bed', output: 'bed', count: 1, ingredients: [{ type: 'wood', count: 10 }, { type: 'wool', count: 3 }] },
-  { id: 'fence', output: 'fence', count: 4, ingredients: [{ type: 'wood', count: 4 }] },
-  { id: 'antenna', output: 'antenna', count: 1, ingredients: [{ type: 'iron_ingot', count: 10 }, { type: 'copper_wiring', count: 5 }], requiresWorkbench: true },
-  
-  // Tools
-  { id: 'wooden_axe', output: 'wooden_axe', count: 1, ingredients: [{ type: 'wood', count: 3 }, { type: 'stick', count: 2 }] },
-  { id: 'wooden_pickaxe', output: 'wooden_pickaxe', count: 1, ingredients: [{ type: 'wood', count: 3 }, { type: 'stick', count: 2 }] },
-  { id: 'wooden_sword', output: 'wooden_sword', count: 1, ingredients: [{ type: 'wood', count: 2 }, { type: 'stick', count: 1 }] },
-  
-  { id: 'stone_axe', output: 'stone_axe', count: 1, ingredients: [{ type: 'stone', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'stone_pickaxe', output: 'stone_pickaxe', count: 1, ingredients: [{ type: 'stone', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'stone_sword', output: 'stone_sword', count: 1, ingredients: [{ type: 'stone', count: 2 }, { type: 'stick', count: 1 }], requiresWorkbench: true },
-  
-  { id: 'iron_axe', output: 'iron_axe', count: 1, ingredients: [{ type: 'iron_ingot', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'iron_pickaxe', output: 'iron_pickaxe', count: 1, ingredients: [{ type: 'iron_ingot', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'iron_sword', output: 'iron_sword', count: 1, ingredients: [{ type: 'iron_ingot', count: 2 }, { type: 'stick', count: 1 }], requiresWorkbench: true },
-
-  // Armor
-  { id: 'leather_cap', output: 'leather_cap', count: 1, ingredients: [{ type: 'leather', count: 5 }], requiresWorkbench: true },
-  { id: 'leather_tunic', output: 'leather_tunic', count: 1, ingredients: [{ type: 'leather', count: 8 }], requiresWorkbench: true },
-  { id: 'leather_pants', output: 'leather_pants', count: 1, ingredients: [{ type: 'leather', count: 7 }], requiresWorkbench: true },
-  { id: 'leather_boots', output: 'leather_boots', count: 1, ingredients: [{ type: 'leather', count: 4 }], requiresWorkbench: true },
-  { id: 'leather_backpack', output: 'leather_backpack', count: 1, ingredients: [{ type: 'leather', count: 10 }, { type: 'wool', count: 2 }], requiresWorkbench: true },
-
-  // Food
-  { id: 'bread', output: 'bread', count: 1, ingredients: [{ type: 'wheat', count: 3 }] },
-  { id: 'meat_pie', output: 'meat_pie', count: 1, ingredients: [{ type: 'cooked_beef', count: 1 }, { type: 'wheat', count: 2 }], requiresWorkbench: true },
-  { id: 'omelet', output: 'omelet', count: 1, ingredients: [{ type: 'egg', count: 2 }], requiresWorkbench: true },
-];
-
-type EquipmentSlotName = 'head' | 'torso' | 'legs' | 'feet' | 'back';
-type Equipment = Record<EquipmentSlotName, InventorySlot | null>;
-
-type AnimalType = 'cow' | 'pig' | 'sheep' | 'chicken';
-
-type AnimalState = 'idle' | 'wander' | 'panic';
-
-interface Animal {
-  id: string;
-  type: AnimalType;
-  x: number;
-  y: number;
-  health: number;
-  maxHealth: number;
-  state: AnimalState;
-  targetX: number;
-  targetY: number;
-  timer: number;
-  facing: 'left' | 'right' | 'up' | 'down';
-  lastHitTime: number;
-  eggTimer?: number;
-  animFrame: number;
-  isMoving: boolean;
-}
-
-interface InventorySlot {
-  type: ItemType;
-  count: number;
-}
-
-interface Resource {
-  id: string;
-  x: number;
-  y: number;
-  type: EntityType;
-  hits: number;
-  maxHits: number;
-  scale: number;
-  opacity: number;
-  rockIndex?: number; // 0-8 for variety
-  growthStage?: number; // 0: sapling, 1: small tree, 2: tree
-  inventory?: (InventorySlot | null)[]; // For chests and furnaces
-  smeltTimer?: number;
-  fuelTimer?: number;
-  maxFuelTimer?: number;
-  growthTimer?: number;
-  antennaProgress?: number; // 0 to 100
-}
-
-interface Enemy {
-  id: string;
-  type: 'static' | 'wolf';
-  x: number;
-  y: number;
-  health: number;
-  maxHealth: number;
-  speed: number;
-  damage: number;
-  targetX: number;
-  targetY: number;
-  state: 'idle' | 'chase' | 'attack';
-  timer: number;
-  facing: 'left' | 'right';
-  lastHitTime: number;
-  tier?: number; // For static enemies (1-5)
-}
-
-interface DroppedItem {
-  id: string;
-  x: number;
-  y: number;
-  type: ItemType;
-}
-
-/**
- * An entry in the z-sorted draw list. The list is heterogeneous — resources,
- * dropped items, animals, enemies, particles and the player all go through the
- * same sort — so this widens the members that genuinely differ between those
- * types and keeps the rest checked.
- */
-type RenderEntity =
-  Partial<Omit<Resource, 'type'>> &
-  Partial<Omit<Animal, 'type' | 'facing' | 'state'>> &
-  Partial<Omit<Enemy, 'type' | 'facing' | 'state'>> &
-  Partial<Omit<DroppedItem, 'type'>> &
-  Partial<Omit<Particle, 'type'>> & {
-    x: number;
-    y: number;
-    sortY: number;
-    type?: EntityType | ItemType | AnimalType | 'player' | 'static' | 'wolf';
-    facing?: 'left' | 'right' | 'up' | 'down';
-    state?: string;
-    isResource?: boolean;
-    isItem?: boolean;
-    isAnimal?: boolean;
-    isEnemy?: boolean;
-    isParticle?: boolean;
-    isTargeted?: boolean;
-  };
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: string;
-  type: 'swirl' | 'footstep' | 'dust';
-  rotation?: number;
-}
-
-interface GameState {
-  width: number;
-  height: number;
-  player: {
-    x: number;
-    y: number;
-    isSprinting: boolean;
-    health: number;
-    hunger: number;
-    defense: number;
-    inventory: (InventorySlot | null)[];
-    equipment: Equipment;
-    selectedSlot: number;
-    facing: 'up' | 'down' | 'left' | 'right';
-    isMoving: boolean;
-    isSitting: boolean;
-    lastMoveTime: number;
-    animFrame: number;
-    lastStarveDamageTime: number;
-    footstepTimer: number;
-  };
-  isPaused: boolean;
-  resources: Map<string, Resource[]>; // Spatial partitioning: chunkId -> resources
-  items: DroppedItem[];
-  animals: Animal[];
-  enemies: Enemy[];
-  particles: Particle[];
-  camera: {
-    x: number;
-    y: number;
-  };
-  generatedChunks: Set<string>;
-  time: number; // 0 to 1440 (minutes in a day)
-  shake: number;
-  isInventoryOpen: boolean;
-  isWorkbenchOpen: boolean;
-  openChestId: string | null;
-  selectedResourceId: string | null;
-  selectedAnimalId: string | null;
-  draggedItem: { slotIndex: number, item: InventorySlot, equipSlot?: 'head' | 'torso' | 'legs' | 'feet' | 'back', fromChest?: boolean } | null;
-  mousePos: { x: number, y: number };
-  message: { text: string, time: number } | null;
-  isRightMouseDown: boolean;
-  lastEatTime: number;
-}
 
 interface GameProps {
   onExitToMenu?: () => void;
@@ -1067,81 +782,20 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       });
     };
 
-    const addToInventory = (type: ItemType, count: number) => {
-      const { inventory } = state.player;
-      
-      // Try to stack
-      for (let i = 0; i < INVENTORY_SLOTS; i++) {
-        if (inventory[i] && inventory[i]!.type === type) {
-          inventory[i]!.count += count;
-          return true;
-        }
-      }
-      
-      // Find empty slot
-      for (let i = 0; i < INVENTORY_SLOTS; i++) {
-        if (!inventory[i]) {
-          inventory[i] = { type, count };
-          return true;
-        }
-      }
-      
-      return false; // Inventory full
-    };
-
-    const removeFromInventory = (type: ItemType, count: number) => {
-      const { inventory } = state.player;
-      let remaining = count;
-      
-      // First pass: exact matches or stacks
-      for (let i = 0; i < INVENTORY_SLOTS; i++) {
-        if (inventory[i] && inventory[i]!.type === type) {
-          const take = Math.min(inventory[i]!.count, remaining);
-          inventory[i]!.count -= take;
-          remaining -= take;
-          if (inventory[i]!.count <= 0) inventory[i] = null;
-          if (remaining <= 0) return true;
-        }
-      }
-      return false;
-    };
-
-    const hasIngredients = (ingredients: { type: ItemType, count: number }[]) => {
-      const { inventory } = state.player;
-      const counts: Record<string, number> = {};
-      
-      for (const slot of inventory) {
-        if (slot) {
-          counts[slot.type] = (counts[slot.type] || 0) + slot.count;
-        }
-      }
-      
-      for (const ing of ingredients) {
-        if ((counts[ing.type] || 0) < ing.count) return false;
-      }
-      return true;
-    };
+    // Thin adapters over the pure systems in src/game/systems, so the call
+    // sites below stay as they were.
+    const addToInventory = (type: ItemType, count: number) => invAdd(state, type, count);
+    const removeFromInventory = (type: ItemType, count: number) => invRemove(state, type, count);
+    const hasIngredients = (ingredients: Ingredient[]) => invHas(state, ingredients);
 
     const _craftItem = (recipeId: string) => {
-      const recipe = CRAFTING_RECIPES.find(r => r.id === recipeId);
-      if (!recipe) return;
-      
-      // Check if workbench is required and if it's open
-      if (recipe.requiresWorkbench && !state.isWorkbenchOpen) {
+      const result = craft(state, recipeId);
+      if (result === 'requires-workbench') {
         state.message = { text: "Requires Workbench", time: Date.now() };
-        return;
-      }
-
-      if (hasIngredients(recipe.ingredients)) {
-        for (const ing of recipe.ingredients) {
-          removeFromInventory(ing.type as ItemType, ing.count);
-        }
-        addToInventory(recipe.output as ItemType, recipe.count);
+      } else if (result === 'ok') {
         soundManager.playCraft();
       }
     };
-
-
 
     const _handleInventoryDrop = (x: number, y: number) => {
       const { player, draggedItem } = state;
@@ -1806,55 +1460,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       state.player.defense = defense;
 
       // Update Furnaces
-      state.resources.forEach(chunk => {
-        chunk.forEach(res => {
-          if (res.type === 'furnace' && res.inventory) {
-            const input = res.inventory[0];
-            const fuel = res.inventory[1];
-            const output = res.inventory[2];
-
-            if (res.fuelTimer && res.fuelTimer > 0) {
-              res.fuelTimer -= dt;
-            }
-
-            if (input && SMELT_RECIPES[input.type]) {
-              const outputType = SMELT_RECIPES[input.type];
-              
-              // Check if we can output
-              if (!output || (output.type === outputType && output.count < 64)) {
-                // Need fuel?
-                if ((!res.fuelTimer || res.fuelTimer <= 0) && fuel && FUEL_VALUES[fuel.type]) {
-                  res.fuelTimer = FUEL_VALUES[fuel.type];
-                  res.maxFuelTimer = res.fuelTimer;
-                  fuel.count--;
-                  if (fuel.count <= 0) res.inventory[1] = null;
-                }
-
-                if (res.fuelTimer && res.fuelTimer > 0) {
-                  res.smeltTimer = (res.smeltTimer || 0) + dt;
-                  if (res.smeltTimer >= SMELT_TIME) {
-                    res.smeltTimer = 0;
-                    input.count--;
-                    if (input.count <= 0) res.inventory[0] = null;
-                    
-                    if (output) {
-                      output.count++;
-                    } else {
-                      res.inventory[2] = { type: outputType as ItemType, count: 1 };
-                    }
-                  }
-                } else {
-                  res.smeltTimer = 0;
-                }
-              } else {
-                res.smeltTimer = 0;
-              }
-            } else {
-              res.smeltTimer = 0;
-            }
-          }
-        });
-      });
+      updateSmelting(state, dt);
 
       // Time progression
       state.time = (state.time + 0.08 * dt) % 1440;
