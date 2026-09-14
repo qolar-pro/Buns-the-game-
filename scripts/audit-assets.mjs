@@ -11,7 +11,7 @@
  * Exit code 1 if either list is non-empty, so this can gate CI.
  */
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
-import { join, relative, extname, basename } from 'node:path';
+import { join, relative, extname } from 'node:path';
 
 const ROOT = process.cwd();
 const PUBLIC_DIR = join(ROOT, 'public');

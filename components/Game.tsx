@@ -1,30 +1,18 @@
 'use client';
 
 // Game component for the resource gathering and crafting game
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpriteColliderGenerator, CollisionLayer, ColliderShape, Point } from '../lib/SpriteCollider';
 import { soundManager } from '../lib/SoundManager';
+import { debug, debugError } from '@/lib/debug';
 
-const TILE_SIZE = 32;
 const PLAYER_SIZE = 128;
 const PLAYER_SPEED = 5.0;
-const EXHAUSTED_SPEED = 2.5;
 
 // Colors
-const GRASS_LIGHT = '#4a7c2c';
-const GRASS_DARK = '#3a6323';
-const DIRT_COLOR = '#5d4037';
-const TREE_LEAF_1 = '#0a2e0a';
-const TREE_LEAF_2 = '#144d14';
-const TREE_LEAF_3 = '#1a631a';
 const TREE_TRUNK = '#3e2723';
-const TREE_TRUNK_DARK = '#261405';
 const ROCK_COLOR = '#5a5a5a';
-const ROCK_HIGHLIGHT = '#7a7a7a';
-const PLAYER_COLOR = '#d4a373';
-const HUD_BG = 'rgba(0, 0, 0, 0.6)';
-const BASE_RESOURCE_SIZE = 128;
 const ROCK_SIZE = 64;
 const GLOBAL_ASSET_SCALE = 1.0;
 const CHUNK_SIZE = 1024;
@@ -53,41 +41,6 @@ const FUEL_VALUES: Record<string, number> = {
 
 const SMELT_TIME = 600; // 10 seconds to smelt
 
-const CRAFTING_RECIPES = [
-  { id: 'stick', output: 'stick', count: 4, ingredients: [{ type: 'wood', count: 1 }] },
-  { id: 'workbench', output: 'workbench', count: 1, ingredients: [{ type: 'wood', count: 10 }] },
-  { id: 'furnace', output: 'furnace', count: 1, ingredients: [{ type: 'stone', count: 15 }] },
-  { id: 'chest', output: 'chest', count: 1, ingredients: [{ type: 'wood', count: 12 }] },
-  { id: 'torch', output: 'torch', count: 4, ingredients: [{ type: 'stick', count: 1 }, { type: 'coal', count: 1 }] },
-  { id: 'bed', output: 'bed', count: 1, ingredients: [{ type: 'wood', count: 10 }, { type: 'wool', count: 3 }] },
-  { id: 'fence', output: 'fence', count: 4, ingredients: [{ type: 'wood', count: 4 }] },
-  { id: 'antenna', output: 'antenna', count: 1, ingredients: [{ type: 'iron_ingot', count: 10 }, { type: 'copper_wiring', count: 5 }], requiresWorkbench: true },
-  
-  // Tools
-  { id: 'wooden_axe', output: 'wooden_axe', count: 1, ingredients: [{ type: 'wood', count: 3 }, { type: 'stick', count: 2 }] },
-  { id: 'wooden_pickaxe', output: 'wooden_pickaxe', count: 1, ingredients: [{ type: 'wood', count: 3 }, { type: 'stick', count: 2 }] },
-  { id: 'wooden_sword', output: 'wooden_sword', count: 1, ingredients: [{ type: 'wood', count: 2 }, { type: 'stick', count: 1 }] },
-  
-  { id: 'stone_axe', output: 'stone_axe', count: 1, ingredients: [{ type: 'stone', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'stone_pickaxe', output: 'stone_pickaxe', count: 1, ingredients: [{ type: 'stone', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'stone_sword', output: 'stone_sword', count: 1, ingredients: [{ type: 'stone', count: 2 }, { type: 'stick', count: 1 }], requiresWorkbench: true },
-  
-  { id: 'iron_axe', output: 'iron_axe', count: 1, ingredients: [{ type: 'iron_ingot', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'iron_pickaxe', output: 'iron_pickaxe', count: 1, ingredients: [{ type: 'iron_ingot', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
-  { id: 'iron_sword', output: 'iron_sword', count: 1, ingredients: [{ type: 'iron_ingot', count: 2 }, { type: 'stick', count: 1 }], requiresWorkbench: true },
-
-  // Armor
-  { id: 'leather_cap', output: 'leather_cap', count: 1, ingredients: [{ type: 'leather', count: 5 }], requiresWorkbench: true },
-  { id: 'leather_tunic', output: 'leather_tunic', count: 1, ingredients: [{ type: 'leather', count: 8 }], requiresWorkbench: true },
-  { id: 'leather_pants', output: 'leather_pants', count: 1, ingredients: [{ type: 'leather', count: 7 }], requiresWorkbench: true },
-  { id: 'leather_boots', output: 'leather_boots', count: 1, ingredients: [{ type: 'leather', count: 4 }], requiresWorkbench: true },
-  { id: 'leather_backpack', output: 'leather_backpack', count: 1, ingredients: [{ type: 'leather', count: 10 }, { type: 'wool', count: 2 }], requiresWorkbench: true },
-
-  // Food
-  { id: 'bread', output: 'bread', count: 1, ingredients: [{ type: 'wheat', count: 3 }] },
-  { id: 'meat_pie', output: 'meat_pie', count: 1, ingredients: [{ type: 'cooked_beef', count: 1 }, { type: 'wheat', count: 2 }], requiresWorkbench: true },
-  { id: 'omelet', output: 'omelet', count: 1, ingredients: [{ type: 'egg', count: 2 }], requiresWorkbench: true },
-];
 
 // Deterministic Noise Functions
 let currentWorldSeed = 42;
@@ -155,7 +108,60 @@ const fbm = (x: number, y: number, octaves = 3) => {
 type EntityType = 'tree' | 'rock' | 'bush' | 'sapling' | 'trunk' | 'coal_ore' | 'torch' | 'workbench' | 'campfire' | 'branch' | 'small_rock' | 'grass' | 'bed' | 'chest' | 'furnace' | 'antenna' | 'fence' | 'iron_ore';
 type ItemType = 'wood' | 'stone' | 'sapling' | 'coal' | 'stick' | 'workbench' | 'campfire' | 'torch' | 'wheat_seeds' | 'wooden_axe' | 'wooden_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'wooden_sword' | 'stone_sword' | 'raw_beef' | 'leather' | 'raw_pork' | 'mutton' | 'wool' | 'raw_chicken' | 'feather' | 'egg' | 'bed' | 'leather_cap' | 'leather_tunic' | 'leather_pants' | 'leather_boots' | 'leather_backpack' | 'chest' | 'furnace' | 'cooked_beef' | 'cooked_pork' | 'cooked_mutton' | 'cooked_chicken' | 'scrap_metal' | 'copper_wiring' | 'iron_ingot' | 'iron_axe' | 'iron_pickaxe' | 'iron_sword' | 'antenna' | 'fence' | 'bread' | 'meat_pie' | 'omelet' | 'wheat';
 
+interface Ingredient {
+  type: ItemType;
+  count: number;
+}
+
+interface Recipe {
+  id: string;
+  output: ItemType;
+  count: number;
+  ingredients: Ingredient[];
+  requiresWorkbench?: boolean;
+}
+
+const CRAFTING_RECIPES: Recipe[] = [
+  { id: 'stick', output: 'stick', count: 4, ingredients: [{ type: 'wood', count: 1 }] },
+  { id: 'workbench', output: 'workbench', count: 1, ingredients: [{ type: 'wood', count: 10 }] },
+  { id: 'furnace', output: 'furnace', count: 1, ingredients: [{ type: 'stone', count: 15 }] },
+  { id: 'chest', output: 'chest', count: 1, ingredients: [{ type: 'wood', count: 12 }] },
+  { id: 'torch', output: 'torch', count: 4, ingredients: [{ type: 'stick', count: 1 }, { type: 'coal', count: 1 }] },
+  { id: 'bed', output: 'bed', count: 1, ingredients: [{ type: 'wood', count: 10 }, { type: 'wool', count: 3 }] },
+  { id: 'fence', output: 'fence', count: 4, ingredients: [{ type: 'wood', count: 4 }] },
+  { id: 'antenna', output: 'antenna', count: 1, ingredients: [{ type: 'iron_ingot', count: 10 }, { type: 'copper_wiring', count: 5 }], requiresWorkbench: true },
+  
+  // Tools
+  { id: 'wooden_axe', output: 'wooden_axe', count: 1, ingredients: [{ type: 'wood', count: 3 }, { type: 'stick', count: 2 }] },
+  { id: 'wooden_pickaxe', output: 'wooden_pickaxe', count: 1, ingredients: [{ type: 'wood', count: 3 }, { type: 'stick', count: 2 }] },
+  { id: 'wooden_sword', output: 'wooden_sword', count: 1, ingredients: [{ type: 'wood', count: 2 }, { type: 'stick', count: 1 }] },
+  
+  { id: 'stone_axe', output: 'stone_axe', count: 1, ingredients: [{ type: 'stone', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
+  { id: 'stone_pickaxe', output: 'stone_pickaxe', count: 1, ingredients: [{ type: 'stone', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
+  { id: 'stone_sword', output: 'stone_sword', count: 1, ingredients: [{ type: 'stone', count: 2 }, { type: 'stick', count: 1 }], requiresWorkbench: true },
+  
+  { id: 'iron_axe', output: 'iron_axe', count: 1, ingredients: [{ type: 'iron_ingot', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
+  { id: 'iron_pickaxe', output: 'iron_pickaxe', count: 1, ingredients: [{ type: 'iron_ingot', count: 3 }, { type: 'stick', count: 2 }], requiresWorkbench: true },
+  { id: 'iron_sword', output: 'iron_sword', count: 1, ingredients: [{ type: 'iron_ingot', count: 2 }, { type: 'stick', count: 1 }], requiresWorkbench: true },
+
+  // Armor
+  { id: 'leather_cap', output: 'leather_cap', count: 1, ingredients: [{ type: 'leather', count: 5 }], requiresWorkbench: true },
+  { id: 'leather_tunic', output: 'leather_tunic', count: 1, ingredients: [{ type: 'leather', count: 8 }], requiresWorkbench: true },
+  { id: 'leather_pants', output: 'leather_pants', count: 1, ingredients: [{ type: 'leather', count: 7 }], requiresWorkbench: true },
+  { id: 'leather_boots', output: 'leather_boots', count: 1, ingredients: [{ type: 'leather', count: 4 }], requiresWorkbench: true },
+  { id: 'leather_backpack', output: 'leather_backpack', count: 1, ingredients: [{ type: 'leather', count: 10 }, { type: 'wool', count: 2 }], requiresWorkbench: true },
+
+  // Food
+  { id: 'bread', output: 'bread', count: 1, ingredients: [{ type: 'wheat', count: 3 }] },
+  { id: 'meat_pie', output: 'meat_pie', count: 1, ingredients: [{ type: 'cooked_beef', count: 1 }, { type: 'wheat', count: 2 }], requiresWorkbench: true },
+  { id: 'omelet', output: 'omelet', count: 1, ingredients: [{ type: 'egg', count: 2 }], requiresWorkbench: true },
+];
+
+type EquipmentSlotName = 'head' | 'torso' | 'legs' | 'feet' | 'back';
+type Equipment = Record<EquipmentSlotName, InventorySlot | null>;
+
 type AnimalType = 'cow' | 'pig' | 'sheep' | 'chicken';
+
 type AnimalState = 'idle' | 'wander' | 'panic';
 
 interface Animal {
@@ -225,6 +231,32 @@ interface DroppedItem {
   type: ItemType;
 }
 
+/**
+ * An entry in the z-sorted draw list. The list is heterogeneous — resources,
+ * dropped items, animals, enemies, particles and the player all go through the
+ * same sort — so this widens the members that genuinely differ between those
+ * types and keeps the rest checked.
+ */
+type RenderEntity =
+  Partial<Omit<Resource, 'type'>> &
+  Partial<Omit<Animal, 'type' | 'facing' | 'state'>> &
+  Partial<Omit<Enemy, 'type' | 'facing' | 'state'>> &
+  Partial<Omit<DroppedItem, 'type'>> &
+  Partial<Omit<Particle, 'type'>> & {
+    x: number;
+    y: number;
+    sortY: number;
+    type?: EntityType | ItemType | AnimalType | 'player' | 'static' | 'wolf';
+    facing?: 'left' | 'right' | 'up' | 'down';
+    state?: string;
+    isResource?: boolean;
+    isItem?: boolean;
+    isAnimal?: boolean;
+    isEnemy?: boolean;
+    isParticle?: boolean;
+    isTargeted?: boolean;
+  };
+
 interface Particle {
   x: number;
   y: number;
@@ -249,13 +281,7 @@ interface GameState {
     hunger: number;
     defense: number;
     inventory: (InventorySlot | null)[];
-    equipment: {
-      head: InventorySlot | null;
-      torso: InventorySlot | null;
-      legs: InventorySlot | null;
-      feet: InventorySlot | null;
-      back: InventorySlot | null;
-    };
+    equipment: Equipment;
     selectedSlot: number;
     facing: 'up' | 'down' | 'left' | 'right';
     isMoving: boolean;
@@ -299,7 +325,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [isPausedUI, setIsPausedUI] = useState(false);
-  const [uiTick, setUiTick] = useState(0);
+  const [_uiTick, setUiTick] = useState(0);
   const refreshUI = () => setUiTick(t => t + 1);
   const [pauseMenuState, setPauseMenuState] = useState<'main' | 'settings'>('main');
   const [volume, setVolume] = useState(50);
@@ -424,7 +450,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         if (img.naturalWidth > 0 && img.naturalHeight > 0) {
           ref.current = img; 
           // Automatically generate collider for the loaded image
-          const isObstacle = src.includes('tree') || src.includes('rock') || src.includes('trunk') || src.includes('workbench') || src.includes('campfire') || src.includes('tortch') || src.includes('coalore') || src.includes('chest') || src.includes('furnace');
+          const isObstacle = src.includes('tree') || src.includes('rock') || src.includes('trunk') || src.includes('workbench') || src.includes('campfire') || src.includes('torch') || src.includes('coalore') || src.includes('chest') || src.includes('furnace');
           const isInteractable = src.includes('stick') || src.includes('sapling') || src.includes('bush') || src.includes('small_rock') || src.includes('coal') || src.includes('wooditem') || src.includes('stoneitem');
           const isAnimal = src.includes('sprite') || src.includes('animation');
           const type = isObstacle ? 'obstacle' : (isInteractable ? 'interactable' : 'animal');
@@ -442,11 +468,11 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
             const cellWidth = img.naturalWidth / cols;
             const cellHeight = img.naturalHeight / rows;
             
-            const hasLabelRow = false;
-            const hasLabelCol = false;
+            const _hasLabelRow = false;
+            const _hasLabelCol = false;
             const labelHeight = 0;
-            const labelCols = 0;
-            const animCols = cols;
+            const _labelCols = 0;
+            const _animCols = cols;
 
             // Use the Smart Collider Generator
             const startX = 0;
@@ -469,18 +495,18 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
                   charHeight: cellHeight - labelHeight
                 }).then(shape => {
                   collidersRef.current.set(src, shape);
-                  console.log(`Smart Collider generated for ${src}: ${shape.points.length} vertices (Labels Ignored)`);
+                  debug(`Smart Collider generated for ${src}: ${shape.points.length} vertices (Labels Ignored)`);
                 }).catch(err => {
-                  console.error(`Smart Collider failed for ${src}:`, err);
+                  debugError(`Smart Collider failed for ${src}:`, err);
                 });
               };
             }
           } else {
             SpriteColliderGenerator.generateFromImage(img, type, layer, 1.0, physicsHeight).then(shape => {
               collidersRef.current.set(src, shape);
-              console.log(`Generated collider for ${src}: ${shape.points.length} points`);
+              debug(`Generated collider for ${src}: ${shape.points.length} points`);
             }).catch(err => {
-              console.error(`Failed to generate collider for ${src}:`, err);
+              debugError(`Failed to generate collider for ${src}:`, err);
             });
           }
         }
@@ -502,7 +528,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     loadImg('/coal.png', coalImgRef);
     loadImg('/coalore.png', coalOreImgRef);
     loadImg('/stick.png', stickImgRef);
-    loadImg('/tortch.png', torchImgRef);
+    loadImg('/torch.png', torchImgRef);
     loadImg('/workbench.png', workbenchImgRef);
     loadImg('/chest.png', chestImgRef);
     loadImg('/furnace.png', furnaceImgRef);
@@ -537,9 +563,9 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         // Rocks are 100% solid
         SpriteColliderGenerator.generateFromImage(img, 'obstacle', CollisionLayer.SOLID, 1.0, 1.0).then(shape => {
           collidersRef.current.set(`/rock${i}.png`, shape);
-          console.log(`Generated collider for /rock${i}.png: ${shape.points.length} points`);
+          debug(`Generated collider for /rock${i}.png: ${shape.points.length} points`);
         }).catch(err => {
-          console.error(`Failed to generate collider for /rock${i}.png:`, err);
+          debugError(`Failed to generate collider for /rock${i}.png:`, err);
         });
       };
     }
@@ -1096,7 +1122,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       return true;
     };
 
-    const craftItem = (recipeId: string) => {
+    const _craftItem = (recipeId: string) => {
       const recipe = CRAFTING_RECIPES.find(r => r.id === recipeId);
       if (!recipe) return;
       
@@ -1106,7 +1132,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         return;
       }
 
-      if (hasIngredients(recipe.ingredients as any)) {
+      if (hasIngredients(recipe.ingredients)) {
         for (const ing of recipe.ingredients) {
           removeFromInventory(ing.type as ItemType, ing.count);
         }
@@ -1117,7 +1143,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
 
 
-    const handleInventoryDrop = (x: number, y: number) => {
+    const _handleInventoryDrop = (x: number, y: number) => {
       const { player, draggedItem } = state;
       if (!draggedItem) return;
       
@@ -1396,7 +1422,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           stateRef.current.animals = parsed.animals;
           stateRef.current.time = parsed.time;
         } catch (e) {
-          console.error("Failed to load save", e);
+          debugError("Failed to load save", e);
           startNewGame();
         }
       } else {
@@ -1470,7 +1496,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           
           if (dist < 120) {
             // Precise collider check
-            const { w, h, imgUrl, rows, cols, hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(a.type);
+            const { w, h, imgUrl, rows, cols: _cols, hasLabelCol: _hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(a.type);
 
             const shape = collidersRef.current.get(imgUrl);
             if (shape) {
@@ -1643,8 +1669,8 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         if (res.hits >= res.maxHits) {
           if (res.type === 'tree' && res.growthStage === 2) {
             // Tree is broken
-            const oldX = res.x;
-            const oldY = res.y;
+            const _oldX = res.x;
+            const _oldY = res.y;
 
             // Drop wood
             const dropCount = Math.floor(8 * res.scale);
@@ -1998,7 +2024,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
                   else if (typeStr === 'trunk') imgUrl = '/trunk.png';
                   else if (typeStr === 'sapling') imgUrl = '/sapling.png';
                   else if (typeStr === 'bush') imgUrl = '/bush.png';
-                  else if (typeStr === 'torch') imgUrl = '/tortch.png';
+                  else if (typeStr === 'torch') imgUrl = '/torch.png';
                   else if (typeStr === 'workbench') imgUrl = '/workbench.png';
                   else if (typeStr === 'campfire') imgUrl = '/campfire1.png';
                   else if (typeStr === 'chest') imgUrl = '/chest.png';
@@ -2064,7 +2090,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
         // Check animals for collision
         state.animals.forEach(animal => {
-          const { w, h, imgUrl, rows, cols, hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(animal.type);
+          const { w, h, imgUrl, rows, cols: _cols, hasLabelCol: _hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(animal.type);
 
           const shape = collidersRef.current.get(imgUrl);
           if (shape) {
@@ -2776,38 +2802,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       ctx.restore();
     };
 
-    const drawWoodenPanel = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
-      ctx.save();
-      // Procedural wooden board
-      ctx.fillStyle = '#8B4513';
-      ctx.fillRect(x, y, w, h);
-      
-      // Symmetrical border
-      ctx.strokeStyle = '#5D2E0A';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(x, y, w, h);
-      
-      // Symmetrical wood grain lines
-      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-      ctx.lineWidth = 1;
-      const grainCount = Math.max(2, Math.floor(h / 25));
-      for(let i=1; i<grainCount; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x + 15, y + (h/grainCount)*i);
-        ctx.lineTo(x + w - 15, y + (h/grainCount)*i);
-        ctx.stroke();
-      }
-
-      // Symmetrical "bolts" in corners
-      ctx.fillStyle = '#3D1F05';
-      const boltSize = 4;
-      const boltOffset = 6;
-      ctx.fillRect(x + boltOffset, y + boltOffset, boltSize, boltSize);
-      ctx.fillRect(x + w - boltOffset - boltSize, y + boltOffset, boltSize, boltSize);
-      ctx.fillRect(x + boltOffset, y + h - boltOffset - boltSize, boltSize, boltSize);
-      ctx.fillRect(x + w - boltOffset - boltSize, y + h - boltOffset - boltSize, boltSize, boltSize);
-      ctx.restore();
-    };
 
     const drawHeartIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
       ctx.save();
@@ -2826,17 +2820,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       ctx.restore();
     };
 
-    const drawBootIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = '#44ff44';
-      // Pixelated boot
-      const s = size / 8;
-      ctx.fillRect(s*2, s, s*2, s*4); // Leg
-      ctx.fillRect(s*2, s*5, s*5, s*2); // Foot
-      ctx.fillRect(s*6, s*6, s, s); // Toe
-      ctx.restore();
-    };
 
     const drawHUD = (ctx: CanvasRenderingContext2D) => {
       const canvasW = ctx.canvas.width;
@@ -2900,7 +2883,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       if (state.selectedResourceId && !state.isInventoryOpen) {
         // Check if within reach
         let selectedRes: Resource | null = null;
-        for (const [chunkId, chunkResources] of state.resources.entries()) {
+        for (const [_chunkId, chunkResources] of state.resources.entries()) {
           const res = chunkResources.find(r => r.id === state.selectedResourceId);
           if (res) {
             selectedRes = res;
@@ -3050,7 +3033,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       ctx.save();
       ctx.translate(animal.x, animal.y);
       
-      const { img, w, h, rows, cols, hasLabelCol, hasLabelRow, labelHeight } = getAnimalSpriteInfo(animal.type);
+      const { img, w, h, rows, cols, hasLabelCol: _hasLabelCol, hasLabelRow: _hasLabelRow, labelHeight } = getAnimalSpriteInfo(animal.type);
       
       if (img && img.complete && img.naturalWidth > 0) {
         const sw = img.naturalWidth / cols;
@@ -3059,7 +3042,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         // The animal spritesheets are 6x8 grids containing 4 different 3x4 characters.
         // We will just use the top-left character (columns 0-2, rows 0-3).
         const animCols = 3;
-        const animRows = 4;
+        const _animRows = 4;
 
         let frameX = 0;
         if (animCols === 3) {
@@ -3301,7 +3284,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         }
       }
 
-      const visibleResources: any[] = [];
+      const visibleResources: RenderEntity[] = [];
       for (let cx = startCX; cx < endCX; cx++) {
         for (let cy = startCY; cy < endCY; cy++) {
           const chunkId = `${cx},${cy}`;
@@ -3349,12 +3332,12 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       });
 
       // Find targeted resource for interaction/highlighting
-      const { player } = state;
-      let targetedResource: any = null;
+      const { player: _player } = state;
+      let targetedResource: Resource | null = null;
       
       // If we have a selected resource, that's our target
       if (state.selectedResourceId) {
-        for (const [chunkId, chunkResources] of state.resources.entries()) {
+        for (const [_chunkId, chunkResources] of state.resources.entries()) {
           const res = chunkResources.find(r => r.id === state.selectedResourceId);
           if (res) {
             targetedResource = res;
@@ -3374,36 +3357,39 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       entities.sort((a, b) => a.sortY - b.sortY);
 
       entities.forEach(ent => {
-        const e = ent as any;
+        const e = ent as RenderEntity;
         if (e.isParticle) {
+          // Narrow to the concrete type this branch is guaranteed to hold, so
+          // the particle fields are checked rather than optional.
+          const pe = ent as Particle & { sortY: number };
           ctx.save();
-          ctx.globalAlpha = e.life * 0.8; // Much higher overall alpha
-          ctx.translate(e.x, e.y);
+          ctx.globalAlpha = pe.life * 0.8; // Much higher overall alpha
+          ctx.translate(pe.x, pe.y);
           
-          if (e.type === 'footstep') {
-            ctx.rotate(e.rotation || 0);
+          if (pe.type === 'footstep') {
+            ctx.rotate(pe.rotation || 0);
             
             // Create a dark radial gradient for the footprint
-            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, e.size / 2);
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, pe.size / 2);
             gradient.addColorStop(0, 'rgba(0, 0, 0, 0.7)'); // Much darker center
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');   // Fades out
             
             ctx.fillStyle = gradient;
             // Draw a small footprint (oval)
             ctx.beginPath();
-            ctx.ellipse(0, 0, e.size / 2, e.size / 4, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, pe.size / 2, pe.size / 4, 0, 0, Math.PI * 2);
             ctx.fill();
-          } else if (e.type === 'dust') {
-            ctx.fillStyle = e.color;
+          } else if (pe.type === 'dust') {
+            ctx.fillStyle = pe.color;
             ctx.beginPath();
-            ctx.arc(0, 0, e.size / 2, 0, Math.PI * 2);
+            ctx.arc(0, 0, pe.size / 2, 0, Math.PI * 2);
             ctx.fill();
           } else {
-            ctx.rotate(e.life * Math.PI * 4); // Swirl effect
-            ctx.strokeStyle = e.color;
+            ctx.rotate(pe.life * Math.PI * 4); // Swirl effect
+            ctx.strokeStyle = pe.color;
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, 0, e.size * (1 - e.life), 0, Math.PI * 1.5);
+            ctx.arc(0, 0, pe.size * (1 - pe.life), 0, Math.PI * 1.5);
             ctx.stroke();
           }
           ctx.restore();
@@ -3412,13 +3398,13 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           const hover = Math.sin(animTimerRef.current * 2 + e.x) * 3;
           drawItemIcon(ctx, e.type as ItemType, Math.round(e.x - 20), Math.round(e.y - 20 + hover), 40);
         } else if (e.isEnemy) {
-          drawEnemy(ctx, e);
+          drawEnemy(ctx, ent as Enemy);
         } else if (e.isAnimal) {
-          drawAnimal(ctx, e);
+          drawAnimal(ctx, ent as Animal);
           
             // Debug: Draw collider shape for animals
             if (debugCollidersRef.current) {
-              const { w, h, imgUrl, rows, cols, hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(e.type);
+              const { w, h, imgUrl, rows, cols: _cols, hasLabelCol: _hasLabelCol, hasLabelRow } = getAnimalSpriteInfo((ent as Animal).type);
 
               const shape = collidersRef.current.get(imgUrl);
               if (shape) {
@@ -3460,7 +3446,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
               }
             }
         } else if (e.type === 'tree' || e.type === 'bush' || e.type === 'sapling' || e.type === 'trunk' || e.type === 'torch' || e.type === 'workbench' || e.type === 'campfire' || e.type === 'bed' || e.type === 'chest' || e.type === 'furnace' || e.type === 'antenna' || e.type === 'fence') {
-          const e = ent as any;
+          const e = ent as Resource & { isTargeted?: boolean };
           ctx.globalAlpha = e.opacity ?? 1;
           const dims = getResourceDimensions(e.type, e.scale, e.growthStage);
           
@@ -3609,7 +3595,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
             ctx.restore();
           }
         } else if (ent.type === 'rock' || ent.type === 'coal_ore' || ent.type === 'iron_ore' || ent.type === 'branch' || ent.type === 'small_rock') {
-          const e = ent as any;
+          const e = ent as Resource & { isTargeted?: boolean };
           ctx.globalAlpha = e.opacity ?? 1;
           const dims = getResourceDimensions(e.type, e.scale, undefined, e.rockIndex);
           
@@ -3727,7 +3713,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
             ctx.stroke();
           }
         } else if (ent.type === 'grass') {
-          const e = ent as any;
+          const e = ent as Resource & { isTargeted?: boolean };
           ctx.globalAlpha = e.opacity ?? 1;
           const dims = getResourceDimensions(e.type, e.scale);
           
@@ -3778,7 +3764,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           ctx.restore();
           ctx.globalAlpha = 1;
         } else if (ent.type === 'player') {
-          const p = ent as any;
+          const p = ent as GameState['player'];
           if (spriteRef.current && spriteRef.current.complete && spriteRef.current.naturalWidth !== 0) {
             const frameX = Math.floor(p.animFrame);
             let finalFrameX = frameX;
@@ -4035,7 +4021,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
             // Check animals first (they are usually on top)
             for (const animal of state.animals) {
-              const { w, h, imgUrl, rows, cols, hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(animal.type);
+              const { w, h, imgUrl, rows, cols: _cols, hasLabelCol: _hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(animal.type);
 
               const shape = collidersRef.current.get(imgUrl);
               if (shape) {
@@ -4087,7 +4073,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
                         else if (typeStr === 'trunk') imgUrl = '/trunk.png';
                         else if (typeStr === 'sapling') imgUrl = '/sapling.png';
                         else if (typeStr === 'bush') imgUrl = '/bush.png';
-                        else if (typeStr === 'torch') imgUrl = '/tortch.png';
+                        else if (typeStr === 'torch') imgUrl = '/torch.png';
                         else if (typeStr === 'workbench') imgUrl = '/workbench.png';
                         else if (typeStr === 'campfire') imgUrl = '/campfire1.png';
                         else if (typeStr === 'chest') imgUrl = '/chest.png';
@@ -4511,7 +4497,7 @@ const ITEM_IMAGES: Record<string, string> = {
   stick: '/stick.png',
   workbench: '/workbench.png',
   campfire: '/campfire1.png',
-  torch: '/tortch.png',
+  torch: '/torch.png',
   wheat_seeds: '/sapling.png',
   wooden_axe: '/woodaxe.png',
   wooden_pickaxe: '/woodepickaxe.png',
@@ -4614,6 +4600,7 @@ const PlaceholderIcon = ({ type, size }: { type: string, size: number }) => {
       );
       case 'wooden_axe':
       case 'stone_axe':
+      {
         const axeColor = type.startsWith('wooden') ? '#a0522d' : '#999';
         const handleColor = type.startsWith('wooden') ? '#8b4513' : '#777';
         return (
@@ -4622,8 +4609,10 @@ const PlaceholderIcon = ({ type, size }: { type: string, size: number }) => {
             <path d="M 50 20 L 80 10 L 90 40 L 60 50 Z" fill={axeColor} stroke="black" strokeWidth="2" />
           </g>
         );
+      }
       case 'wooden_pickaxe':
       case 'stone_pickaxe':
+      {
         const pickColor = type.startsWith('wooden') ? '#a0522d' : '#999';
         const pickHandleColor = type.startsWith('wooden') ? '#8b4513' : '#777';
         return (
@@ -4632,8 +4621,10 @@ const PlaceholderIcon = ({ type, size }: { type: string, size: number }) => {
             <path d="M 10 40 Q 50 20 90 40 L 90 50 Q 50 30 10 50 Z" fill={pickColor} stroke="black" strokeWidth="2" />
           </g>
         );
+      }
       case 'wooden_sword':
       case 'stone_sword':
+      {
         const swordColor = type.startsWith('wooden') ? '#a0522d' : '#999';
         const swordHandleColor = type.startsWith('wooden') ? '#8b4513' : '#777';
         return (
@@ -4642,6 +4633,7 @@ const PlaceholderIcon = ({ type, size }: { type: string, size: number }) => {
             <path d="M 40 60 L 80 20 L 90 10 L 70 30 Z" fill={swordColor} stroke="black" strokeWidth="2" />
           </g>
         );
+      }
       case 'leather_cap': return <path d="M 20 70 A 30 30 0 0 1 80 70 Z" fill="#8d6e63" stroke="#5d4037" strokeWidth="4" />;
       case 'leather_tunic': return <rect width="60" height="60" x="20" y="20" fill="#8d6e63" stroke="#5d4037" strokeWidth="4" />;
       case 'leather_pants': return (
@@ -4791,7 +4783,7 @@ const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, ref
     if (from === 'inventory') {
       itemToMove = state.player.inventory[fromIndex];
     } else if (from === 'equipment' && fromSlot) {
-      itemToMove = (state.player.equipment as any)[fromSlot];
+      itemToMove = state.player.equipment[fromSlot as EquipmentSlotName];
     } else if (from === 'chest' || from === 'furnace') {
       const openChest = Array.from(state.resources.values()).flat().find(r => r.id === state.openChestId);
       if (openChest && openChest.inventory) {
@@ -4808,7 +4800,7 @@ const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, ref
     if (from === 'inventory') {
       state.player.inventory[fromIndex] = null;
     } else if (from === 'equipment' && fromSlot) {
-      (state.player.equipment as any)[fromSlot] = null;
+      state.player.equipment[fromSlot as EquipmentSlotName] = null;
     } else if (from === 'chest' || from === 'furnace') {
       const openChest = Array.from(state.resources.values()).flat().find(r => r.id === state.openChestId);
       if (openChest && openChest.inventory) {
@@ -4830,7 +4822,7 @@ const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, ref
       const isBackpack = itemToMove.type === 'leather_backpack';
       
       if ((isArmor && toSlot !== 'back') || (isBackpack && toSlot === 'back')) {
-         (state.player.equipment as any)[toSlot] = itemToMove;
+         state.player.equipment[toSlot as EquipmentSlotName] = itemToMove;
       } else {
         // Return to inventory if invalid slot
         // For now just swap or something
@@ -4881,8 +4873,6 @@ const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, ref
               openChest.type === 'furnace' ? (
                 <FurnaceUI 
                   furnace={openChest} 
-                  state={state} 
-                  refreshUI={refreshUI} 
                   handleDrop={handleDrop} 
                   setDraggedItem={setDraggedItem} 
                 />
@@ -4967,7 +4957,13 @@ const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, ref
   );
 };
 
-const SlotUI = ({ slot, label, onDrop, onDragStart, isSelected }: any) => {
+const SlotUI = ({ slot, label, onDrop, onDragStart, isSelected }: {
+  slot: InventorySlot | null | undefined;
+  label?: string;
+  onDrop?: () => void;
+  onDragStart?: () => void;
+  isSelected?: boolean;
+}) => {
   return (
     <div 
       className={`w-16 h-16 bg-black/20 border-2 border-black/40 flex items-center justify-center relative ${isSelected ? 'border-white/60 bg-white/10' : ''}`}
@@ -4991,10 +4987,14 @@ const SlotUI = ({ slot, label, onDrop, onDragStart, isSelected }: any) => {
   );
 };
 
-const RecipeUI = ({ recipe, state, refreshUI }: any) => {
+const RecipeUI = ({ recipe, state, refreshUI }: {
+  recipe: Recipe;
+  state: GameState;
+  refreshUI: () => void;
+}) => {
   const hasIngredients = (ingredients: { type: string, count: number }[]) => {
     return ingredients.every(ing => {
-      const count = state.player.inventory.reduce((acc: number, slot: any) => acc + (slot?.type === ing.type ? slot.count : 0), 0);
+      const count = state.player.inventory.reduce((acc: number, slot: InventorySlot | null) => acc + (slot?.type === ing.type ? slot.count : 0), 0);
       return count >= ing.count;
     });
   };
@@ -5005,7 +5005,7 @@ const RecipeUI = ({ recipe, state, refreshUI }: any) => {
     if (!canCraft) return;
 
     // Remove ingredients
-    recipe.ingredients.forEach((ing: any) => {
+    recipe.ingredients.forEach((ing: Ingredient) => {
       let remaining = ing.count;
       for (let i = 0; i < state.player.inventory.length; i++) {
         const slot = state.player.inventory[i];
@@ -5047,14 +5047,18 @@ const RecipeUI = ({ recipe, state, refreshUI }: any) => {
       <div className="flex flex-col">
         <span className="text-[#2D1B0A] font-mono font-bold text-xs uppercase">{recipe.id.replace('_', ' ')}</span>
         <span className="text-[#2D1B0A] font-mono text-[9px] opacity-70">
-          {recipe.ingredients.map((ing: any) => `${ing.count} ${ing.type}`).join(', ')}
+          {recipe.ingredients.map((ing: Ingredient) => `${ing.count} ${ing.type}`).join(', ')}
         </span>
       </div>
     </div>
   );
 };
 
-const FurnaceUI = ({ furnace, state, refreshUI, handleDrop, setDraggedItem }: any) => {
+const FurnaceUI = ({ furnace, handleDrop, setDraggedItem }: {
+  furnace: Resource;
+  handleDrop: (index: number, target: 'furnace') => void;
+  setDraggedItem: (v: { index: number; from: 'furnace' }) => void;
+}) => {
   return (
     <div className="flex flex-col items-center gap-8 py-4">
       <div className="flex items-center gap-12">
@@ -5079,11 +5083,11 @@ const FurnaceUI = ({ furnace, state, refreshUI, handleDrop, setDraggedItem }: an
 
         <div className="flex flex-col items-center gap-2">
           <div className="w-32 h-6 bg-black/40 border-2 border-black/60 relative overflow-hidden">
-            {furnace.smeltTimer > 0 && (
+            {(furnace.smeltTimer ?? 0) > 0 && (
               <motion.div 
                 className="absolute inset-y-0 left-0 bg-orange-500"
                 initial={{ width: 0 }}
-                animate={{ width: `${(furnace.smeltTimer / 600) * 100}%` }}
+                animate={{ width: `${((furnace.smeltTimer ?? 0) / 600) * 100}%` }}
                 transition={{ type: 'spring', stiffness: 50, damping: 20 }}
               />
             )}
@@ -5101,13 +5105,13 @@ const FurnaceUI = ({ furnace, state, refreshUI, handleDrop, setDraggedItem }: an
         </div>
       </div>
 
-      {furnace.fuelTimer > 0 && (
+      {(furnace.fuelTimer ?? 0) > 0 && (
         <div className="flex flex-col items-center gap-1">
           <div className="w-16 h-2 bg-black/40 border border-black/60 relative overflow-hidden">
             <motion.div 
               className="absolute inset-y-0 left-0 bg-red-600"
               initial={{ width: 0 }}
-              animate={{ width: `${(furnace.fuelTimer / furnace.maxFuelTimer) * 100}%` }}
+              animate={{ width: `${((furnace.fuelTimer ?? 0) / (furnace.maxFuelTimer || 1)) * 100}%` }}
               transition={{ type: 'spring', stiffness: 50, damping: 20 }}
             />
           </div>

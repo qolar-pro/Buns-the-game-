@@ -12,7 +12,7 @@
  * which .mcp.json sets, along with NODE_EXTRA_CA_CERTS for the agent proxy CA.
  */
 import { writeFile, mkdir } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const API = 'https://api.replicate.com/v1';
 const TOKEN = process.env.REPLICATE_API_TOKEN;

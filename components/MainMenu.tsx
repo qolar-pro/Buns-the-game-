@@ -27,18 +27,6 @@ export default function MainMenu({ onStartGame, onLoadGame }: MainMenuProps) {
     }
   }, [activeMenu]);
 
-  const handleMultiplayer = () => {
-    console.log('Multiplayer not yet implemented');
-    alert('Multiplayer: Coming Soon!');
-  };
-
-  const handleExit = () => {
-    if (confirm('Are you sure you want to exit?')) {
-      // In a web environment, we can't easily close the tab, so we show a blank screen
-      document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000;color:#fff;font-family:monospace;font-size:24px;">Game Closed. You can close this tab.</div>';
-    }
-  };
-
   // Reusable Button Component for consistent pixel-art styling
   const MenuButton = ({ onClick, children, disabled = false }: { onClick: () => void, children: React.ReactNode, disabled?: boolean }) => (
     <button
@@ -100,9 +88,7 @@ export default function MainMenu({ onStartGame, onLoadGame }: MainMenuProps) {
         <div className="flex flex-col items-center z-10">
           <MenuButton onClick={onStartGame}>Create World</MenuButton>
           <MenuButton onClick={() => setActiveMenu('load')}>Load World</MenuButton>
-          <MenuButton onClick={handleMultiplayer} disabled>Multiplayer</MenuButton>
           <MenuButton onClick={() => setActiveMenu('options')}>Options</MenuButton>
-          <MenuButton onClick={handleExit}>Exit Game</MenuButton>
         </div>
       )}
 

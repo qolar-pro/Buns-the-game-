@@ -7,7 +7,7 @@ Living log for the 10-phase overhaul. Updated at the end of every phase.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Safety net: audit, checklist, baselines | ✅ Complete |
-| 1 | Repo hygiene | ⬜ Not started |
+| 1 | Repo hygiene | ✅ Complete |
 | 2 | Decompose `Game.tsx` | ⬜ Not started |
 | 3 | Asset system (manifest, registry, authored colliders) | ⬜ Not started |
 | 4 | Regenerate every asset + audio | ⬜ Not started |
@@ -82,6 +82,49 @@ Raw audit output: `docs/audit-baseline.txt`.
   hard-coded `#FF00FF` would have failed on every asset. Edge flood-fill with a tolerance keys the
   actual background colour whatever hue the model chose, and will not punch holes in interior pixels
   that happen to match.
+
+## Phase 1 results
+
+| Metric | Before | After |
+|---|---|---|
+| `npm run build` | passed with lint skipped | passes with **ESLint + TypeScript both enforced** |
+| ESLint errors | n/a (not run) | 0 (3 warnings) |
+| `: any` | 8 | **0** |
+| Stray `console.*` | 11 | **0** (routed through `lib/debug.ts`) |
+| Stray root PNGs | 4 (480 KB) | **0** |
+| Dead dependencies | 5 | **0** |
+| ESLint configs | 2 | 1 (flat) |
+| Smoke test | n/a | **10/11** (only the known missing-asset 404s fail) |
+
+- **DD-007: Wrote a flat ESLint config against the plugins directly.**
+  `eslint-config-next` 15.x still ships only legacy `.eslintrc` configs and loads
+  `@rushstack/eslint-patch`, which throws outright under ESLint 9 flat config — so simply deleting
+  `.eslintrc.json` and keeping the existing flat config left lint completely broken. The flat config
+  now wires `@next/eslint-plugin-next`, `@typescript-eslint`, `react` and `react-hooks` directly,
+  which is the modern arrangement and drops a dependency on a broken compatibility shim.
+
+- **DD-008: Removed the main menu's Exit button rather than rewiring it.**
+  The spec asks for exit → return to menu. But the button is *on* the main menu, so there is nowhere
+  to return to, and the in-game pause menu already has a working "Main Menu" action. The destructive
+  `document.body.innerHTML` handler is gone and the button with it. Multiplayer is removed entirely
+  rather than alerting, as specified.
+
+- **DD-009: Typed the draw list with narrowing casts instead of one loose type.**
+  Removing the eight `as any` casts in the draw loop by widening everything to a single permissive
+  type made every field optional and produced worse errors than it fixed. Each branch now narrows to
+  the concrete type it is actually guaranteed to hold (`Particle`, `Resource`, `Animal`, `Enemy`),
+  which keeps field names checked and carries directly into the Phase 2 `EntityRenderer`.
+
+- **DD-010: Added `scripts/smoke-test.mjs` as an automated slice of the manual checklist.**
+  The manual 25-step pass is the contract, but running it by hand after every extraction in Phase 2
+  is not practical. The smoke test drives a real browser through boot, world render, movement,
+  harvesting, inventory, hotbar, pause and save, and fails on new 404s or uncaught errors — enough to
+  catch a broken extraction immediately, with the manual pass reserved for phase boundaries.
+
+- **DD-011: Rate-limited the asset generator to match the account's 6 requests/minute cap.**
+  The first full run failed all 101 assets with HTTP 429. Generation now serialises prediction
+  creation through a minimum-interval gate with exponential backoff on 429, while polling and
+  downloads still run concurrently.
 
 ## Before / after screenshots
 

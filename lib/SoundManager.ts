@@ -1,3 +1,4 @@
+import { debugError } from '@/lib/debug';
 /**
  * SoundManager using Web Audio API to generate procedural sounds.
  */
@@ -15,7 +16,10 @@ export class SoundManager {
   private init() {
     if (this.isInitialized) return;
     try {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const Ctor: typeof AudioContext =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new Ctor();
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = 0.5;
       this.masterGain.connect(this.ctx.destination);
@@ -31,7 +35,7 @@ export class SoundManager {
       this.isInitialized = true;
       this.startAmbient();
     } catch (e) {
-      console.error('Failed to initialize AudioContext', e);
+      debugError('Failed to initialize AudioContext', e);
     }
   }
 
