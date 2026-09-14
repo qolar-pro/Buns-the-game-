@@ -8,7 +8,6 @@
  */
 import { FRAMES } from '../assets/frames';
 import type { Animal, AnimalType, Enemy, GameState } from '../core/types';
-import type { ColliderShape } from '../../../lib/SpriteCollider';
 
 type Sprite = HTMLCanvasElement;
 
@@ -20,9 +19,6 @@ export interface EntityRenderDeps {
     sheep: () => Sprite | null;
     chicken: () => Sprite | null;
   };
-  colliders: Map<string, ColliderShape>;
-  animTimer: () => number;
-  debugColliders: () => boolean;
 }
 
 /**
@@ -31,9 +27,7 @@ export interface EntityRenderDeps {
  * A factory so the bodies could move across unchanged — they read a handful of
  * refs that are now supplied here instead of captured from an enclosing effect.
  */
-export function createEntityRenderer({
-  state, sprites, colliders, animTimer, debugColliders,
-}: EntityRenderDeps) {
+export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
   const getAnimalSpriteInfo = (type: AnimalType) => {
     let img: Sprite | null = null;
     let w = 100, h = 100; // Default sizes

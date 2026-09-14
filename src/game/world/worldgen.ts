@@ -10,9 +10,7 @@
  */
 import { CHUNK_SIZE } from '../core/config';
 import { fbm, hash } from './noise';
-import type {
-  Animal, AnimalType, EntityType, GameState, ItemType, Resource,
-} from '../core/types';
+import type { AnimalType, EntityType, GameState, ItemType } from '../core/types';
 
 /** Draw dimensions for an entity, supplied by the renderer. */
 export type DimensionFn = (
