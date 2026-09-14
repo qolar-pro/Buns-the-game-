@@ -123,21 +123,38 @@ const items = [
   I('iron_ingot', 'a single polished cold blue-grey iron ingot bar with a metallic highlight'),
 ];
 
-// --- Characters (5 sheets) --------------------------------------------------
-// Diffusion models are unreliable at exact sprite grids; these are reviewed and
-// regenerated hardest. Grid is authored here regardless of what comes back.
+// --- Characters -------------------------------------------------------------
+// Diffusion cannot hold a character consistent across the cells of a sprite
+// grid — the first attempt produced a scatter of unrelated figures rather than
+// a walk cycle. Instead one clean sprite is generated per facing direction and
+// scripts/build-sheets.mjs composes the walk frames from it deterministically,
+// so every frame is the same character. See DD-012.
+const DIRECTIONS = [
+  ['down', 'seen from the front, facing towards the viewer'],
+  ['left', 'seen from its left side, facing left in profile'],
+  ['right', 'seen from its right side, facing right in profile'],
+  ['up', 'seen from behind, facing away from the viewer'],
+];
+
+const creature = (id, cols, desc) =>
+  DIRECTIONS.map(([dir, view]) => ({
+    id: `${id}_${dir}`,
+    cat: 'prop',
+    atlas: 'characters',
+    w: 64,
+    h: id === 'player' ? 96 : 64,
+    gw: 768,
+    gh: id === 'player' ? 1024 : 768,
+    sheet: { id, cols, dir },
+    prompt: `${desc}, ${view}, full body visible, standing upright, single character, centred`,
+  }));
+
 const characters = [
-  { id: 'player', cat: 'character', atlas: 'characters', w: 512, h: 384, gw: 1024, gh: 768, grid: [8, 4],
-    prompt: 'a farmer character in a straw hat, blue overalls and a red shirt, walk cycle poses, ' +
-            'four rows showing the character facing down, left, right and up' },
-  { id: 'cow', cat: 'character', atlas: 'characters', w: 192, h: 256, gw: 768, gh: 1024, grid: [3, 4],
-    prompt: 'a white and brown spotted cow, walk cycle poses, four rows facing down, left, right and up' },
-  { id: 'pig', cat: 'character', atlas: 'characters', w: 192, h: 256, gw: 768, gh: 1024, grid: [3, 4],
-    prompt: 'a pink pig, walk cycle poses, four rows facing down, left, right and up' },
-  { id: 'sheep', cat: 'character', atlas: 'characters', w: 192, h: 256, gw: 768, gh: 1024, grid: [3, 4],
-    prompt: 'a fluffy cream white sheep, walk cycle poses, four rows facing down, left, right and up' },
-  { id: 'chicken', cat: 'character', atlas: 'characters', w: 192, h: 256, gw: 768, gh: 1024, grid: [3, 4],
-    prompt: 'a white chicken with a red comb, walk cycle poses, four rows facing down, left, right and up' },
+  ...creature('player', 8, 'a friendly farmer character wearing a wide straw hat, a red shirt and blue denim overalls'),
+  ...creature('cow', 3, 'a white and brown spotted cow'),
+  ...creature('pig', 3, 'a plump pink pig'),
+  ...creature('sheep', 3, 'a fluffy cream white sheep'),
+  ...creature('chicken', 3, 'a white chicken with a red comb'),
 ];
 
 // --- Effects (6) ------------------------------------------------------------
@@ -150,18 +167,18 @@ const effects = [
   E('sleep_z', 'three pale blue letter Z shapes floating upward in a row, cartoon sleep symbol'),
 ];
 
-// --- UI (8) -----------------------------------------------------------------
+// --- UI icons ---------------------------------------------------------------
+// Only true icons are generated. Panel frames, slots and buttons are chrome:
+// they need exact geometry and 9-slice edges that a diffusion model cannot hold,
+// and Phase 6 rebuilds the UI as React DOM styled from the shared palette, where
+// they are CSS borders rather than sprites. See DD-013.
 const ui = [
-  U('panel_frame', 192, 192, 'a square wooden game panel frame border with carved edges and an empty flat centre'),
-  U('slot', 64, 64, 'a square empty wooden inventory slot with a recessed darker centre'),
-  U('slot_selected', 64, 64, 'a square wooden inventory slot with a glowing bright golden highlighted border'),
-  U('button', 192, 64, 'a horizontal wooden game button with a carved border, flat and unpressed'),
-  U('button_hover', 192, 64, 'a horizontal wooden game button with a carved border, lit and glowing warmly'),
-  U('button_pressed', 192, 64, 'a horizontal wooden game button with a carved border, pressed inward and darkened'),
-  U('heart', 64, 64, 'a plump glossy red heart icon'),
-  U('drumstick', 64, 64, 'a golden brown roasted drumstick icon'),
-  U('stamina_bolt', 64, 64, 'a bright yellow lightning bolt icon'),
-  U('cursor', 64, 64, 'a simple white game pointer cursor arrow with a dark outline'),
+  U('heart', 64, 64, 'a plump glossy red heart icon, simple and bold'),
+  U('heart_empty', 64, 64, 'an empty dark grey outlined heart icon, simple and bold'),
+  U('drumstick', 64, 64, 'a golden brown roasted drumstick icon, simple and bold'),
+  U('drumstick_empty', 64, 64, 'an empty dark grey outlined drumstick icon, simple and bold'),
+  U('stamina_bolt', 64, 64, 'a bright yellow lightning bolt icon, thick and bold, filling the frame'),
+  U('cursor', 64, 64, 'a simple white pointer arrow cursor with a thick dark outline, filling the frame'),
 ];
 
 export const CATALOG = [

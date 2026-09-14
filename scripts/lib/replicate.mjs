@@ -16,21 +16,54 @@ export const DEFAULT_MODEL = process.env.REPLICATE_ASSET_MODEL || 'black-forest-
  * Deliberately asks for NO shadow: shadows are baked uniformly in post
  * (scripts/process-asset.mjs) so every sprite shares one shadow treatment.
  */
-export const STYLE_PREFIX = [
-  'top-down three-quarter view video game asset, camera 60 degrees above the horizon',
-  'hand-painted chunky stylised game art, bold readable silhouette, minimal fine detail',
-  'crisp dark outline around the shape',
+/**
+ * Shared look, applied to every prompt so the whole set reads as one game.
+ * Deliberately asks for NO shadow: shadows are baked uniformly in post
+ * (scripts/process-asset.mjs) so every sprite shares one shadow treatment.
+ */
+const LOOK = [
+  'hand-painted chunky stylised game art, bold readable shapes, minimal fine detail',
+  'crisp dark outline around shapes',
   'single warm sunlight from the upper left at 45 degrees, soft ambient fill',
   'warm slightly saturated daylight colours',
-  'NO shadow on the ground, no cast shadow, no reflection',
-  'isolated on a completely flat uniform solid magenta chroma key background',
-  'no scenery, no horizon, no ground plane, no text, no watermark, no border',
+  'no text, no watermark, no border, no letters',
 ].join(', ');
 
+/**
+ * How the subject is framed. Terrain is the important exception: a tileable
+ * texture must fill the frame, so it must NOT get the "isolated on a chroma key
+ * background" language that every other category needs. Mixing the two produced
+ * grass tufts floating on magenta instead of a grass texture.
+ */
+const ISOLATED = [
+  'top-down three-quarter view video game asset, camera 60 degrees above the horizon',
+  'NO shadow on the ground, no cast shadow, no reflection',
+  'isolated on a completely flat uniform solid magenta chroma key background',
+  'no scenery, no horizon, no ground plane',
+].join(', ');
+
+const FULL_BLEED = [
+  'flat overhead top-down view, seamless repeating texture',
+  'the texture fills the entire frame edge to edge with no background visible',
+  'uniform density across the whole image, no focal point, no vignette, no border',
+  'no objects sitting on top, no shadows, no lighting gradient',
+].join(', ');
+
+export const STYLE_PREFIX = `${ISOLATED}, ${LOOK}`;
+
+/** Category-specific prefix; terrain swaps isolation for full-bleed. */
+function prefixFor(category) {
+  if (category === 'terrain') return `${FULL_BLEED}, ${LOOK}`;
+  if (category === 'ui') {
+    return `flat 2D game user interface icon, front-on flat view, clean geometric shapes, ` +
+      `isolated on a completely flat uniform solid magenta chroma key background, ` +
+      `NO shadow, no perspective, no 3d bevel, ${LOOK}`;
+  }
+  return `${ISOLATED}, ${LOOK}`;
+}
+
 export const CATEGORY_HINTS = {
-  terrain:
-    'seamless repeating tileable texture filling the entire frame edge to edge, uniform density, ' +
-    'no single focal object, no vignette, no border, flat overhead view',
+  terrain: 'photographed straight down, continuous ground surface, consistent scale across the frame',
   detail: 'one small ground detail object, centred, tiny, seen from above at a slight angle',
   prop: 'one single object standing upright, centred, full object visible, anchored at the bottom centre',
   item:
@@ -216,8 +249,11 @@ export async function generateAsset({
     throw new Error(`unknown category "${category}"; expected ${Object.keys(CATEGORY_HINTS).join(', ')}`);
   }
 
-  const fullPrompt = `${STYLE_PREFIX}, ${CATEGORY_HINTS[category]}, ${prompt}`;
-  const negative = negativeExtra ? `${NEGATIVE}, ${negativeExtra}` : NEGATIVE;
+  const fullPrompt = `${prefixFor(category)}, ${CATEGORY_HINTS[category]}, ${prompt}`;
+  const baseNegative = category === 'terrain'
+    ? NEGATIVE.replace('multiple objects, ', '').replace('collage, ', '')
+    : NEGATIVE;
+  const negative = negativeExtra ? `${baseNegative}, ${negativeExtra}` : baseNegative;
   const input = await buildInput(model, token, { prompt: fullPrompt, negative, width, height, seed });
 
   const pred = await predict(model, input, token);
