@@ -7,6 +7,10 @@ import { SpriteColliderGenerator, CollisionLayer, ColliderShape, Point } from '.
 import { soundManager } from '../lib/SoundManager';
 import { debugError } from '@/lib/debug';
 import { assets } from '@/src/game/assets/AssetRegistry';
+
+/** The viewport the world is authored around; smaller screens zoom out to match. */
+const DESIGN_WIDTH = 1280;
+const DESIGN_HEIGHT = 720;
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { Hud } from '@/components/ui/Hud';
 import { InventoryOverlay } from '@/components/ui/InventoryOverlay';
@@ -15,6 +19,9 @@ import { applySave, serialize, toSaveFile } from '@/src/game/save/serialize';
 import { readSlot as loadSlot, writeSlot } from '@/src/game/save/storage';
 import { SaveError } from '@/src/game/save/schema';
 import { SaveIndicator } from '@/components/ui/SaveIndicator';
+import { TouchControls } from '@/components/ui/TouchControls';
+import { RotatePrompt } from '@/components/ui/RotatePrompt';
+import { useIsPortrait, useIsTouch } from '@/hooks/use-touch';
 import { FRAMES } from '@/src/game/assets/frames';
 
 /** First cell of the player sheet, used for the equipment paper doll. */
@@ -62,6 +69,10 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
   /** Slot identity and accumulated playtime, carried across autosaves. */
   const saveMetaRef = useRef({ id: loadedSaveId ?? 'slot-1', name: 'Slot 1', createdAt: Date.now(), playtimeMs: 0 });
   const sessionStartRef = useRef(Date.now());
+  /** Canvas scaling: world->CSS zoom, and the device pixel ratio. */
+  const viewRef = useRef({ zoom: 1, dpr: 1 });
+  const isTouch = useIsTouch();
+  const isPortrait = useIsPortrait();
   const [assetProgress, setAssetProgress] = useState({ loaded: 0, total: 5 });
   const [_uiTick, setUiTick] = useState(0);
   const refreshUI = () => setUiTick(t => t + 1);
@@ -241,12 +252,30 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    /**
+     * Size the canvas, accounting for device pixel ratio and viewport size.
+     *
+     * Two separate concerns:
+     *  - The backing store is DPR-scaled, so sprites are not resampled by the
+     *    browser on a high-density screen.
+     *  - Small viewports zoom out. The world is authored around a ~1280x720
+     *    view; on a 851x393 phone the player would otherwise fill a third of the
+     *    screen and almost nothing else would be visible. `state.width/height`
+     *    stay in world units so the camera and culling are unaffected.
+     */
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      setDimensions({ width: w, height: h });
-      state.width = w;
-      state.height = h;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      // Never zoom in past 1:1; zoom out only as far as legibility allows.
+      const zoom = Math.max(0.5, Math.min(1, Math.min(w / DESIGN_WIDTH, h / DESIGN_HEIGHT)));
+
+      viewRef.current = { zoom, dpr };
+      setDimensions({ width: Math.round(w * dpr), height: Math.round(h * dpr) });
+
+      state.width = w / zoom;
+      state.height = h / zoom;
     };
 
     window.addEventListener('resize', handleResize);
@@ -2066,6 +2095,12 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
+      // Map world units onto the DPR-scaled backing store. Everything below
+      // continues to draw in world units, unchanged.
+      const { zoom, dpr } = viewRef.current;
+      ctx.setTransform(zoom * dpr, 0, 0, zoom * dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+
       ctx.save();
       // Use Math.floor consistently for camera translation
       ctx.translate(-Math.floor(state.camera.x), -Math.floor(state.camera.y));
@@ -2807,8 +2842,8 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       // Use Math.floor for pixel-perfect alignment with the canvas grid
-      const x = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
-      const y = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
+      const x = Math.floor(((e.clientX - rect.left) / rect.width) * state.width);
+      const y = Math.floor(((e.clientY - rect.top) / rect.height) * state.height);
       
       if (e.button === 0) {
         if (state.isInventoryOpen) {
@@ -3014,8 +3049,8 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
-      const y = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
+      const x = Math.floor(((e.clientX - rect.left) / rect.width) * state.width);
+      const y = Math.floor(((e.clientY - rect.top) / rect.height) * state.height);
       state.mousePos = { x, y };
     };
 
@@ -3166,6 +3201,23 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         <LoadingScreen loaded={assetProgress.loaded} total={assetProgress.total} />
       )}
 
+      {isTouch && isPortrait && <RotatePrompt />}
+
+      {isTouch && assetsReady && (
+        <TouchControls
+          keys={keysRef}
+          onOpenInventory={() => {
+            const st = stateRef.current;
+            st.isInventoryOpen = !st.isInventoryOpen;
+            if (!st.isInventoryOpen) {
+              st.isWorkbenchOpen = false;
+              st.openChestId = null;
+            }
+            refreshUI();
+          }}
+        />
+      )}
+
       <SaveIndicator state={saveState} />
 
       {loadError && (
@@ -3189,6 +3241,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
       {assetsReady && (
         <Hud
+          compact={isTouch}
           onSelectSlot={(i) => {
             stateRef.current.player.selectedSlot = i;
           }}
@@ -3199,7 +3252,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         ref={canvasRef}
         width={dimensions.width}
         height={dimensions.height}
-        style={{ imageRendering: 'pixelated' }}
+        style={{ imageRendering: 'pixelated', width: '100vw', height: '100vh' }}
         className="block"
       />
       
@@ -3347,9 +3400,11 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         )}
       </AnimatePresence>
 
-      <div className="absolute bottom-4 right-4 text-neutral-400 text-xs font-mono bg-black/50 p-2 rounded pointer-events-none">
-        WASD: Move | SPACE: Harvest | X: Sit | E: Inventory
-      </div>
+      {!isTouch && (
+        <div className="absolute bottom-4 right-4 text-neutral-400 text-xs font-mono bg-black/50 p-2 rounded pointer-events-none">
+          WASD: Move | SPACE: Harvest | X: Sit | E: Inventory
+        </div>
+      )}
     </div>
   );
 }

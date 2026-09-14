@@ -97,7 +97,7 @@ export const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameSta
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-8"
+      className="absolute inset-0 bg-black/60 flex items-start sm:items-center justify-center z-50 p-2 sm:p-8 overflow-y-auto"
       onClick={onClose}
     >
       <motion.div 

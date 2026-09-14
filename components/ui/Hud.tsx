@@ -41,7 +41,7 @@ function Pips({
   );
 }
 
-export function Hud({ onSelectSlot }: { onSelectSlot?: (i: number) => void }) {
+export function Hud({ onSelectSlot, compact = false }: { onSelectSlot?: (i: number) => void; compact?: boolean }) {
   const hud = useSyncExternalStore(subscribeHud, getHudSnapshot, getHudServerSnapshot);
 
   return (
@@ -58,8 +58,15 @@ export function Hud({ onSelectSlot }: { onSelectSlot?: (i: number) => void }) {
         </div>
       )}
 
-      {/* Vitals + hotbar */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+      {/* Vitals + hotbar. On touch the stick owns the bottom-left corner and the
+          action buttons the bottom-right, so the hotbar sits between them and
+          scrolls horizontally rather than overflowing. */}
+      <div
+        className="absolute left-1/2 -translate-x-1/2"
+        style={compact
+          ? { bottom: '0.5rem', width: 'min(46vw, 420px)' }
+          : { bottom: '1rem', width: 'min(100vw - 2rem, 560px)' }}
+      >
         <div className="mb-2 flex items-end justify-between gap-6 px-1">
           {/* Health is a 0-100 bar, matching what the engine tracks. */}
           <div
@@ -77,7 +84,7 @@ export function Hud({ onSelectSlot }: { onSelectSlot?: (i: number) => void }) {
           <Pips value={hud.hunger} max={hud.maxHunger} filled="🍗" empty="🦴" label="Hunger" />
         </div>
 
-        <div className="pointer-events-auto flex gap-1">
+        <div className="pointer-events-auto flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {Array.from({ length: HOTBAR_SLOTS }, (_, i) => {
             const item = hud.hotbar[i];
             const selected = hud.selectedSlot === i;
@@ -88,14 +95,14 @@ export function Hud({ onSelectSlot }: { onSelectSlot?: (i: number) => void }) {
                 onClick={() => onSelectSlot?.(i)}
                 aria-label={item ? `Slot ${i + 1}: ${item.type} x${item.count}` : `Slot ${i + 1}: empty`}
                 aria-pressed={selected}
-                className="relative flex h-14 w-14 items-center justify-center border-2 transition-colors"
+                className="relative flex h-11 w-11 shrink-0 items-center justify-center border-2 transition-colors sm:h-14 sm:w-14"
                 style={{
                   borderColor: selected ? '#fed859' : '#7c4d23',
                   background: selected ? 'rgba(254,216,89,0.14)' : 'rgba(0,0,0,0.45)',
                 }}
               >
                 <span className="absolute left-1 top-0 text-[9px] text-white/50">{i + 1}</span>
-                {item && <ItemIcon type={item.type} size={34} />}
+                {item && <ItemIcon type={item.type} size={28} />}
                 {item && item.count > 1 && (
                   <span className="absolute bottom-0 right-1 text-[10px] font-bold text-white">
                     {item.count}

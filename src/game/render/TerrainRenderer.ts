@@ -102,13 +102,26 @@ export function renderChunkTerrain(cx: number, cy: number, tiles: TerrainTiles):
     ctx.drawImage(dirtLayer, 0, 0);
   }
 
-  // 4. Blight overlay, unchanged in behaviour from the original.
-  const blighted = fbm(cx * CHUNK_SIZE * 0.001, cy * CHUNK_SIZE * 0.001, 2) > BLIGHT_THRESHOLD;
-  if (blighted) {
+  // 4. Blight. The original decided this per chunk and tinted the whole square,
+  //    which drew a hard straight edge across the world wherever the flag
+  //    flipped between neighbouring chunks. It is sampled per pixel from the
+  //    same noise field now, so blighted ground fades in and out.
+  const blight = document.createElement('canvas');
+  blight.width = CHUNK_SIZE;
+  blight.height = CHUNK_SIZE;
+  const bctx = blight.getContext('2d');
+  if (bctx) {
+    bctx.fillStyle = 'rgb(20, 10, 30)';
+    bctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
+    bctx.globalCompositeOperation = 'destination-in';
+    bctx.imageSmoothingEnabled = true;
+    bctx.drawImage(
+      buildMask(chunkX, chunkY, BLIGHT_THRESHOLD, 0.18, 8821, 0.6),
+      0, 0, MASK_RES, MASK_RES, 0, 0, CHUNK_SIZE, CHUNK_SIZE,
+    );
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = 'rgba(20, 10, 30, 0.6)';
-    ctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
+    ctx.drawImage(blight, 0, 0);
     ctx.restore();
   }
 
@@ -116,7 +129,9 @@ export function renderChunkTerrain(cx: number, cy: number, tiles: TerrainTiles):
 }
 
 /** Soft alpha mask from the world noise field. */
-function buildMask(chunkX: number, chunkY: number, threshold: number, ramp: number, salt: number): HTMLCanvasElement {
+function buildMask(
+  chunkX: number, chunkY: number, threshold: number, ramp: number, salt: number, maxAlpha = 1,
+): HTMLCanvasElement {
   const mask = document.createElement('canvas');
   mask.width = MASK_RES;
   mask.height = MASK_RES;
@@ -130,7 +145,7 @@ function buildMask(chunkX: number, chunkY: number, threshold: number, ramp: numb
       const worldY = chunkY + y * 16 + salt;
       const noise = fbm(worldX * 0.0005, worldY * 0.0005, 4);
       const alpha = noise > threshold
-        ? Math.floor(Math.min(1, (noise - threshold) / ramp) * 255)
+        ? Math.floor(Math.min(1, (noise - threshold) / ramp) * maxAlpha * 255)
         : 0;
       const idx = (y * MASK_RES + x) * 4;
       data[idx] = 255;
