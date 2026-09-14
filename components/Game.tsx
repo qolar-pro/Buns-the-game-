@@ -2,13 +2,15 @@
 
 // Game component for the resource gathering and crafting game
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { SpriteColliderGenerator, CollisionLayer, ColliderShape, Point } from '../lib/SpriteCollider';
 import { soundManager } from '../lib/SoundManager';
 import { debugError } from '@/lib/debug';
 import { assets } from '@/src/game/assets/AssetRegistry';
-import { ItemIcon } from '@/components/ui/ItemIcon';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { Hud } from '@/components/ui/Hud';
+import { InventoryOverlay } from '@/components/ui/InventoryOverlay';
+import { publishHud, toHotbar } from '@/src/game/core/HudStore';
 import { FRAMES } from '@/src/game/assets/frames';
 
 /** First cell of the player sheet, used for the equipment paper doll. */
@@ -16,14 +18,14 @@ const PLAYER_FRAME = FRAMES['characters/player'];
 /** Sprites are atlas-backed canvases now, not <img> elements. */
 type Sprite = HTMLCanvasElement;
 import { buildColliders, idForEntity } from '@/src/game/assets/colliders';
+import { metaFor } from '@/src/game/assets/manifest';
 import { renderChunkTerrain as drawChunkTerrain } from '@/src/game/render/TerrainRenderer';
 import {
-  PLAYER_SIZE, PLAYER_SPEED, TREE_TRUNK, ROCK_COLOR, ROCK_SIZE, GLOBAL_ASSET_SCALE,
+  PLAYER_SIZE, PLAYER_SPEED, ROCK_COLOR, ROCK_SIZE, GLOBAL_ASSET_SCALE,
   CHUNK_SIZE, HOTBAR_SLOTS, MAIN_INV_ROWS, MAIN_INV_COLS,
   SLOT_SIZE, SLOT_MARGIN, MAX_HUNGER,
 } from '@/src/game/core/config';
 import { reseedNoise, fbm, hash } from '@/src/game/world/noise';
-import { CRAFTING_RECIPES } from '@/src/game/core/recipes';
 import {
   addToInventory as invAdd,
   removeFromInventory as invRemove,
@@ -31,8 +33,8 @@ import {
 import { craftItem as craft } from '@/src/game/systems/crafting';
 import { updateSmelting } from '@/src/game/systems/smelting';
 import type {
-  EntityType, ItemType, Ingredient, Recipe, EquipmentSlotName,
-  AnimalType, Animal, InventorySlot, Resource, Enemy,
+  EntityType, ItemType,
+  AnimalType, Animal, Resource, Enemy,
   RenderEntity, Particle, GameState,
 } from '@/src/game/core/types';
 
@@ -247,45 +249,20 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     state.camera.x = -state.width / 2;
     state.camera.y = -state.height / 2;
     
+    /**
+     * Draw size for a world entity.
+     *
+     * Read from the manifest's authored worldSize, never from the sprite's
+     * pixel dimensions. Deriving size from pixels meant regenerating art at a
+     * different resolution silently resized everything in the world.
+     */
     const getResourceDimensions = (type: EntityType, scale: number, growthStage?: number, rockIndex?: number) => {
-      let img: Sprite | null = null;
-      if (type === 'sapling') img = saplingImgRef.current;
-      else if (type === 'bush') img = bushImgRef.current;
-      else if (type === 'trunk') img = trunkImgRef.current;
-      else if (type === 'tree') {
-        img = growthStage === 1 ? smallTreeImgRef.current : treeImgRef.current;
-      } else if (type === 'rock' || type === 'coal_ore') {
-        img = rockImgRefs.current[rockIndex ?? 0] || null;
-      } else if (type === 'torch') {
-        img = torchImgRef.current;
-      } else if (type === 'workbench') {
-        img = workbenchImgRef.current;
-      } else if (type === 'campfire') {
-        img = (Math.floor(Date.now() / 200) % 2 === 0) ? campfire1ImgRef.current : campfire2ImgRef.current;
-      } else if (type === 'chest') {
-        img = chestImgRef.current;
-      } else if (type === 'furnace') {
-        img = furnaceImgRef.current;
-      } else if (type === 'branch') {
-        img = stickImgRef.current;
-      } else if (type === 'small_rock') {
-        img = stoneItemImgRef.current;
-      } else if (type === 'grass') {
-        // No image for grass yet, will draw manually or use a placeholder
+      const meta = metaFor(idForEntity(type as string, { growthStage, rockIndex }));
+      if (meta) {
+        return { w: meta.worldSize.w * scale, h: meta.worldSize.h * scale };
       }
 
-      if (img && img) {
-        let finalScale = GLOBAL_ASSET_SCALE * scale;
-        if (type === 'torch' || type === 'workbench' || type === 'campfire' || type === 'sapling' || type === 'branch' || type === 'small_rock' || type === 'chest' || type === 'furnace') {
-          finalScale = 0.4 * scale; // Adjusted for better matching with 128px player
-        }
-        return {
-          w: img.width * finalScale,
-          h: img.height * finalScale
-        };
-      }
-
-      // Fallback
+      // Fallback for entities with no sprite (e.g. procedural grass tufts).
       let base = 128;
       if (type === 'rock') base = ROCK_SIZE;
       else if (type === 'sapling') base = 48;
@@ -1881,549 +1858,10 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       }
     };
 
-    const drawItemIcon = (ctx: CanvasRenderingContext2D, type: ItemType, x: number, y: number, size: number) => {
-      ctx.save();
-      ctx.translate(x, y);
-
-      const drawImageFit = (img: Sprite | null, scale = 1) => {
-        if (!img || !img) return false;
-        const aspect = img.width / img.height;
-        let dw = size * scale;
-        let dh = size * scale;
-        let dx = (size - dw) / 2;
-        let dy = (size - dh) / 2;
-        if (aspect > 1) {
-          dh = (size / aspect) * scale;
-          dy = (size - dh) / 2;
-        } else {
-          dw = (size * aspect) * scale;
-          dx = (size - dw) / 2;
-        }
-        ctx.drawImage(img, dx, dy, dw, dh);
-        return true;
-      };
-      
-      if (type === 'wood') {
-        const img = woodItemImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = TREE_TRUNK;
-          ctx.fillRect(size * 0.1, size * 0.3, size * 0.8, size * 0.4);
-          ctx.strokeStyle = 'black';
-          ctx.strokeRect(size * 0.1, size * 0.3, size * 0.8, size * 0.4);
-        }
-      } else if (type === 'stone') {
-        const img = stoneItemImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = ROCK_COLOR;
-          ctx.beginPath();
-          ctx.arc(size/2, size/2, size/2.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
-      } else if (type === 'sapling') {
-        const img = saplingImgRef.current;
-        if (!drawImageFit(img, 2.5)) {
-          // Draw a more visible sapling
-          ctx.fillStyle = '#8b4513'; // Stem
-          ctx.fillRect(size * 0.4, size * 0.2, size * 0.2, size * 0.7);
-          ctx.fillStyle = '#4caf50'; // Leaves
-          ctx.beginPath();
-          ctx.arc(size * 0.5, size * 0.25, size * 0.4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(size * 0.2, size * 0.6, size * 0.35, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(size * 0.8, size * 0.6, size * 0.35, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (type === 'coal') {
-        const img = coalImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = '#1a1a1a';
-          ctx.beginPath();
-          ctx.arc(size/2, size/2, size/3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#333';
-          ctx.stroke();
-        }
-      } else if (type === 'stick') {
-        const img = stickImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.strokeStyle = '#8b4513';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(size * 0.2, size * 0.8);
-          ctx.lineTo(size * 0.8, size * 0.2);
-          ctx.stroke();
-        }
-      } else if (type === 'workbench') {
-        const img = workbenchImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = '#8b4513';
-          ctx.fillRect(size * 0.1, size * 0.2, size * 0.8, size * 0.6);
-          ctx.strokeStyle = 'black';
-          ctx.strokeRect(size * 0.1, size * 0.2, size * 0.8, size * 0.6);
-          ctx.fillStyle = '#d2b48c';
-          ctx.fillRect(size * 0.2, size * 0.3, size * 0.6, size * 0.1);
-        }
-      } else if (type === 'torch') {
-        const img = torchImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.strokeStyle = '#8b4513';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(size/2, size * 0.8);
-          ctx.lineTo(size/2, size * 0.3);
-          ctx.stroke();
-          ctx.fillStyle = '#ff4500';
-          ctx.beginPath();
-          ctx.arc(size/2, size * 0.2, size * 0.15, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (type === 'campfire') {
-        const img = (Math.floor(animTimerRef.current * 4) % 2 === 0) ? campfire1ImgRef.current : campfire2ImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = '#8b4513';
-          ctx.fillRect(size * 0.2, size * 0.6, size * 0.6, size * 0.2);
-          ctx.fillStyle = '#ff4500';
-          ctx.beginPath();
-          ctx.moveTo(size * 0.3, size * 0.6);
-          ctx.lineTo(size * 0.5, size * 0.2);
-          ctx.lineTo(size * 0.7, size * 0.6);
-          ctx.fill();
-        }
-      } else if (type === 'wooden_axe' || type === 'stone_axe') {
-        const img = type === 'wooden_axe' ? woodAxeImgRef.current : stoneAxeImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.strokeStyle = type === 'wooden_axe' ? '#8b4513' : '#777';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(size * 0.3, size * 0.8);
-          ctx.lineTo(size * 0.7, size * 0.2);
-          ctx.stroke();
-          ctx.fillStyle = type === 'wooden_axe' ? '#a0522d' : '#999';
-          ctx.beginPath();
-          ctx.moveTo(size * 0.5, size * 0.2);
-          ctx.lineTo(size * 0.8, size * 0.1);
-          ctx.lineTo(size * 0.9, size * 0.4);
-          ctx.lineTo(size * 0.6, size * 0.5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-        }
-      } else if (type === 'wooden_pickaxe' || type === 'stone_pickaxe') {
-        const img = type === 'wooden_pickaxe' ? woodPickaxeImgRef.current : stonePickaxeImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.strokeStyle = type === 'wooden_pickaxe' ? '#8b4513' : '#777';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(size * 0.5, size * 0.9);
-          ctx.lineTo(size * 0.5, size * 0.3);
-          ctx.stroke();
-          ctx.fillStyle = type === 'wooden_pickaxe' ? '#a0522d' : '#999';
-          ctx.beginPath();
-          ctx.moveTo(size * 0.1, size * 0.4);
-          ctx.quadraticCurveTo(size * 0.5, size * 0.2, size * 0.9, size * 0.4);
-          ctx.lineTo(size * 0.9, size * 0.5);
-          ctx.quadraticCurveTo(size * 0.5, size * 0.3, size * 0.1, size * 0.5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-        }
-      } else if (type === 'wooden_sword' || type === 'stone_sword') {
-        const img = type === 'wooden_sword' ? woodSwordImgRef.current : stoneSwordImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.strokeStyle = type === 'wooden_sword' ? '#8b4513' : '#777';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(size * 0.2, size * 0.8);
-          ctx.lineTo(size * 0.5, size * 0.5);
-          ctx.stroke();
-          ctx.fillStyle = type === 'wooden_sword' ? '#a0522d' : '#999';
-          ctx.beginPath();
-          ctx.moveTo(size * 0.4, size * 0.6);
-          ctx.lineTo(size * 0.8, size * 0.2);
-          ctx.lineTo(size * 0.9, size * 0.1);
-          ctx.lineTo(size * 0.7, size * 0.3);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-        }
-      } else if (type === 'wheat_seeds') {
-        const img = saplingImgRef.current; // Reusing sapling img for now if needed
-        if (!drawImageFit(img, 2.5)) {
-          ctx.fillStyle = '#f4a460';
-          ctx.strokeStyle = '#d2b48c';
-          ctx.lineWidth = 1;
-          // Draw larger, more distinct seeds
-          for (let i = 0; i < 3; i++) {
-            ctx.beginPath();
-            ctx.ellipse(size * (0.3 + i * 0.2), size * 0.5, size * 0.2, size * 0.25, Math.PI / 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-          }
-        }
-      } else if (type === 'raw_beef') {
-        ctx.fillStyle = '#b71c1c';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.5, size * 0.5, size * 0.3, size * 0.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#7f0000';
-        ctx.stroke();
-        ctx.fillStyle = '#ffcdd2';
-        ctx.fillRect(size * 0.4, size * 0.4, size * 0.2, size * 0.05);
-      } else if (type === 'raw_pork') {
-        ctx.fillStyle = '#f48fb1';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.5, size * 0.5, size * 0.3, size * 0.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#c2185b';
-        ctx.stroke();
-      } else if (type === 'mutton') {
-        ctx.fillStyle = '#e57373';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.5, size * 0.5, size * 0.25, size * 0.25, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#b71c1c';
-        ctx.stroke();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(size * 0.2, size * 0.45, size * 0.15, size * 0.1);
-      } else if (type === 'raw_chicken') {
-        ctx.fillStyle = '#ffe0b2';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.6, size * 0.5, size * 0.2, size * 0.3, Math.PI / 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#f57c00';
-        ctx.stroke();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(size * 0.2, size * 0.6, size * 0.2, size * 0.1);
-      } else if (type === 'leather') {
-        ctx.fillStyle = '#8d6e63';
-        ctx.beginPath();
-        ctx.moveTo(size * 0.3, size * 0.2);
-        ctx.lineTo(size * 0.7, size * 0.2);
-        ctx.lineTo(size * 0.8, size * 0.8);
-        ctx.lineTo(size * 0.2, size * 0.8);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#5d4037';
-        ctx.stroke();
-      } else if (type === 'leather_cap') {
-        ctx.fillStyle = '#8d6e63';
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/3, Math.PI, 0);
-        ctx.lineTo(size*0.8, size*0.7);
-        ctx.lineTo(size*0.2, size*0.7);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#5d4037';
-        ctx.stroke();
-      } else if (type === 'leather_tunic') {
-        ctx.fillStyle = '#8d6e63';
-        ctx.fillRect(size * 0.2, size * 0.2, size * 0.6, size * 0.6);
-        ctx.strokeStyle = '#5d4037';
-        ctx.strokeRect(size * 0.2, size * 0.2, size * 0.6, size * 0.6);
-      } else if (type === 'leather_pants') {
-        ctx.fillStyle = '#8d6e63';
-        ctx.fillRect(size * 0.3, size * 0.2, size * 0.4, size * 0.3);
-        ctx.fillRect(size * 0.3, size * 0.5, size * 0.15, size * 0.4);
-        ctx.fillRect(size * 0.55, size * 0.5, size * 0.15, size * 0.4);
-        ctx.strokeStyle = '#5d4037';
-        ctx.strokeRect(size * 0.3, size * 0.2, size * 0.4, size * 0.3);
-      } else if (type === 'leather_boots') {
-        ctx.fillStyle = '#8d6e63';
-        ctx.fillRect(size * 0.2, size * 0.5, size * 0.25, size * 0.4);
-        ctx.fillRect(size * 0.55, size * 0.5, size * 0.25, size * 0.4);
-        ctx.strokeStyle = '#5d4037';
-        ctx.strokeRect(size * 0.2, size * 0.5, size * 0.25, size * 0.4);
-        ctx.strokeRect(size * 0.55, size * 0.5, size * 0.25, size * 0.4);
-      } else if (type === 'leather_backpack') {
-        ctx.fillStyle = '#8d6e63';
-        ctx.fillRect(size * 0.2, size * 0.2, size * 0.6, size * 0.7);
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(size * 0.3, size * 0.3, size * 0.4, size * 0.4);
-        ctx.strokeStyle = 'black';
-        ctx.strokeRect(size * 0.2, size * 0.2, size * 0.6, size * 0.7);
-      } else if (type === 'chest') {
-        const img = chestImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = '#8b4513';
-          ctx.fillRect(size * 0.1, size * 0.2, size * 0.8, size * 0.6);
-          ctx.strokeStyle = 'black';
-          ctx.strokeRect(size * 0.1, size * 0.2, size * 0.8, size * 0.6);
-          ctx.fillStyle = 'gold';
-          ctx.fillRect(size * 0.45, size * 0.45, size * 0.1, size * 0.1);
-        }
-      } else if (type === 'furnace') {
-        const img = furnaceImgRef.current;
-        if (!drawImageFit(img)) {
-          ctx.fillStyle = 'gray';
-          ctx.fillRect(size * 0.1, size * 0.1, size * 0.8, size * 0.8);
-          ctx.strokeStyle = 'black';
-          ctx.strokeRect(size * 0.1, size * 0.1, size * 0.8, size * 0.8);
-          ctx.fillStyle = 'black';
-          ctx.fillRect(size * 0.3, size * 0.5, size * 0.4, size * 0.3);
-        }
-      } else if (type === 'cooked_beef' || type === 'cooked_pork' || type === 'cooked_mutton') {
-        ctx.fillStyle = '#5d4037';
-        ctx.beginPath();
-        ctx.ellipse(size/2, size/2, size/2.5, size/3.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#3e2723';
-        ctx.stroke();
-      } else if (type === 'cooked_chicken') {
-        ctx.fillStyle = '#d7ccc8';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.6, size * 0.5, size * 0.2, size * 0.3, Math.PI / 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#8d6e63';
-        ctx.stroke();
-      } else if (type === 'wool') {
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(size * 0.4, size * 0.4, size * 0.2, 0, Math.PI * 2);
-        ctx.arc(size * 0.6, size * 0.4, size * 0.2, 0, Math.PI * 2);
-        ctx.arc(size * 0.5, size * 0.6, size * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#e0e0e0';
-        ctx.stroke();
-      } else if (type === 'feather') {
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.5, size * 0.5, size * 0.1, size * 0.3, Math.PI / 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#9e9e9e';
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(size * 0.3, size * 0.7);
-        ctx.lineTo(size * 0.7, size * 0.3);
-        ctx.stroke();
-      } else if (type === 'egg') {
-        ctx.fillStyle = '#fff9c4';
-        ctx.beginPath();
-        ctx.ellipse(size * 0.5, size * 0.5, size * 0.2, size * 0.25, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#fbc02d';
-        ctx.stroke();
-      } else if (type === 'bed') {
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(size * 0.1, size * 0.3, size * 0.8, size * 0.4);
-        ctx.fillStyle = '#e57373';
-        ctx.fillRect(size * 0.3, size * 0.35, size * 0.55, size * 0.3);
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillRect(size * 0.15, size * 0.35, size * 0.15, size * 0.3);
-      }
-      
-      ctx.restore();
-    };
 
 
-    const drawHeartIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = '#ff4444';
-      // Pixelated heart
-      const s = size / 8;
-      ctx.fillRect(s*2, 0, s*2, s);
-      ctx.fillRect(s*5, 0, s*2, s);
-      ctx.fillRect(s, s, s*7, s);
-      ctx.fillRect(0, s*2, s*9, s*3);
-      ctx.fillRect(s, s*5, s*7, s);
-      ctx.fillRect(s*2, s*6, s*5, s);
-      ctx.fillRect(s*3, s*7, s*3, s);
-      ctx.fillRect(s*4, s*8, s, s);
-      ctx.restore();
-    };
 
 
-    const drawHUD = (ctx: CanvasRenderingContext2D) => {
-      const canvasW = ctx.canvas.width;
-      const canvasH = ctx.canvas.height;
-
-      // Clock at top middle
-      const hours = Math.floor(state.time / 60);
-      const mins = Math.floor(state.time % 60);
-      const timeStr = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-      
-      ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      const clockW = 100;
-      const clockH = 30;
-      ctx.fillRect((canvasW - clockW) / 2, 10, clockW, clockH);
-      ctx.strokeStyle = '#8b4513';
-      ctx.lineWidth = 2;
-      ctx.strokeRect((canvasW - clockW) / 2, 10, clockW, clockH);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = '12px "Press Start 2P", "Courier New", monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(timeStr, canvasW / 2, 10 + clockH / 2);
-      ctx.restore();
-
-      // Hotbar dimensions
-      const hotbarW = HOTBAR_SLOTS * (SLOT_SIZE + SLOT_MARGIN);
-      const hotbarX = (canvasW - hotbarW) / 2;
-      const hotbarY = canvasH - SLOT_SIZE - 20;
-
-      // Health and Stamina bars fill the hotbar width
-      const barH = 12;
-      const gap = 50; // Gap for icons in the middle
-      const totalBarWidth = hotbarW;
-      const individualBarW = (totalBarWidth - gap) / 2;
-      const uiY = hotbarY - 35;
-      const uiX = hotbarX;
-
-      if (!state.isInventoryOpen) {
-        // Health (Left side)
-        drawHeartIcon(ctx, uiX, uiY - 4, 20);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(uiX + 25, uiY, individualBarW - 25, barH);
-        ctx.fillStyle = '#ff4444';
-        ctx.fillRect(uiX + 25, uiY, (state.player.health / 100) * (individualBarW - 25), barH);
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(uiX + 25, uiY, individualBarW - 25, barH);
-
-        // Hunger (Right side) - Segmented
-        const hungerStartX = uiX + individualBarW + gap;
-        const drumstickSize = 20;
-        for (let i = 0; i < 10; i++) {
-          const isEmpty = state.player.hunger < (i + 1);
-          drawDrumstick(ctx, hungerStartX + i * (drumstickSize + 2), uiY - 4, drumstickSize, isEmpty);
-        }
-      }
-
-      // Prompt text (Wooden Board) - Now on top of the bars
-      if (state.selectedResourceId && !state.isInventoryOpen) {
-        // Check if within reach
-        let selectedRes: Resource | null = null;
-        for (const [_chunkId, chunkResources] of state.resources.entries()) {
-          const res = chunkResources.find(r => r.id === state.selectedResourceId);
-          if (res) {
-            selectedRes = res;
-            break;
-          }
-        }
-
-        if (selectedRes) {
-          const px = state.player.x + PLAYER_SIZE / 2;
-          const py = state.player.y + PLAYER_SIZE * 0.85; 
-          const dims = getResourceDimensions(selectedRes.type, selectedRes.scale, selectedRes.growthStage, selectedRes.rockIndex);
-          const tx = selectedRes.x + dims.w / 2;
-          const ty = (selectedRes.type === 'rock' || selectedRes.type === 'coal_ore' || selectedRes.type === 'branch' || selectedRes.type === 'small_rock' || selectedRes.type === 'grass') 
-            ? selectedRes.y + dims.h / 2 
-            : selectedRes.y + dims.h * 0.85;
-          const dist = Math.sqrt(Math.pow(px - tx, 2) + Math.pow(py - ty, 2));
-          
-          const inRange = dist < 200;
-          const promptText = inRange ? "Press 'Space' to break" : "Move closer";
-          
-          ctx.save();
-          const boardW = 500; // More compact width
-          const boardH = 50;  // More compact height
-          const bx = Math.floor((canvasW - boardW) / 2); // Perfectly centered
-          const by = uiY - boardH - 15; // Positioned just above the bars
-
-          // Procedural wooden board (Symmetrical)
-          ctx.fillStyle = '#8B4513';
-          ctx.fillRect(bx, by, boardW, boardH);
-          
-          // Symmetrical border
-          ctx.strokeStyle = '#5D2E0A';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(bx, by, boardW, boardH);
-          
-          // Symmetrical wood grain lines
-          ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-          ctx.lineWidth = 1;
-          for(let i=1; i<3; i++) {
-            ctx.beginPath();
-            ctx.moveTo(bx + 15, by + (boardH/3)*i);
-            ctx.lineTo(bx + boardW - 15, by + (boardH/3)*i);
-            ctx.stroke();
-          }
-
-          // Symmetrical "bolts" in corners
-          ctx.fillStyle = '#3D1F05';
-          const boltSize = 4;
-          const boltOffset = 6;
-          ctx.fillRect(bx + boltOffset, by + boltOffset, boltSize, boltSize);
-          ctx.fillRect(bx + boardW - boltOffset - boltSize, by + boltOffset, boltSize, boltSize);
-          ctx.fillRect(bx + boltOffset, by + boardH - boltOffset - boltSize, boltSize, boltSize);
-          ctx.fillRect(bx + boardW - boltOffset - boltSize, by + boardH - boltOffset - boltSize, boltSize, boltSize);
-
-          // Engraved text effect
-          ctx.font = '12px "Press Start 2P", "Courier New", monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          
-          const centerX = Math.floor(canvasW / 2); // Center text perfectly on screen
-          const centerY = Math.floor(by + boardH / 2);
-
-          // 1. Bottom-right highlight for depth
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-          ctx.fillText(promptText, centerX + 2, centerY + 2);
-          
-          // 2. Top-left shadow for depth
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-          ctx.fillText(promptText, centerX - 1, centerY - 1);
-          
-          // 3. Main text (Deep Dark Brown)
-          ctx.fillStyle = '#2D1B0A'; 
-          ctx.fillText(promptText, centerX, centerY);
-          
-          ctx.restore();
-        }
-      }
-
-      // Draw Message (e.g., "Tool ineffective")
-      if (state.message && Date.now() - state.message.time < 2000) {
-        ctx.save();
-        ctx.font = 'bold 14px "Press Start 2P", "Courier New", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        const msgW = ctx.measureText(state.message.text).width + 40;
-        ctx.fillRect(canvasW / 2 - msgW / 2, 100, msgW, 50);
-        ctx.fillStyle = '#ff4444';
-        ctx.fillText(state.message.text, canvasW / 2, 135);
-        ctx.restore();
-      }
-
-      if (!state.isInventoryOpen) {
-        for (let i = 0; i < HOTBAR_SLOTS; i++) {
-          const sx = hotbarX + i * (SLOT_SIZE + SLOT_MARGIN);
-          
-          // Engraved slot look for hotbar
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-          ctx.strokeStyle = i === state.player.selectedSlot ? 'white' : 'rgba(0, 0, 0, 0.4)';
-          ctx.lineWidth = i === state.player.selectedSlot ? 3 : 2;
-          ctx.fillRect(sx, hotbarY, SLOT_SIZE, SLOT_SIZE);
-          ctx.strokeRect(sx, hotbarY, SLOT_SIZE, SLOT_SIZE);
-
-          const item = state.player.inventory[i];
-          if (item) {
-            drawItemIcon(ctx, item.type, sx + 5, hotbarY + 5, SLOT_SIZE - 10);
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.textAlign = 'right';
-            ctx.fillText(item.count.toString(), sx + SLOT_SIZE - 5, hotbarY + SLOT_SIZE - 5);
-            ctx.textAlign = 'left';
-          }
-          
-          // Slot number
-          ctx.fillStyle = '#aaa';
-          ctx.font = '10px sans-serif';
-          ctx.fillText((i + 1).toString(), sx + 5, hotbarY + 12);
-        }
-      }
-
-      // Main Inventory Screen
-      if (state.isInventoryOpen) {
-        // Handled by React UI
-      }
-    };
 
 
     const getAnimalSpriteInfo = (type: AnimalType) => {
@@ -2531,45 +1969,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       ctx.restore();
     };
 
-    const drawDrumstick = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, empty: boolean) => {
-      ctx.save();
-      ctx.translate(x + size / 2, y + size / 2);
-      
-      if (empty) {
-        ctx.fillStyle = '#e0e0e0';
-        ctx.strokeStyle = '#9e9e9e';
-        ctx.lineWidth = 2;
-        ctx.fillRect(-size * 0.1, -size * 0.3, size * 0.2, size * 0.6);
-        ctx.strokeRect(-size * 0.1, -size * 0.3, size * 0.2, size * 0.6);
-        const endSize = size * 0.15;
-        ctx.beginPath();
-        ctx.arc(-size * 0.1, -size * 0.3, endSize, 0, Math.PI * 2);
-        ctx.arc(size * 0.1, -size * 0.3, endSize, 0, Math.PI * 2);
-        ctx.arc(-size * 0.1, size * 0.3, endSize, 0, Math.PI * 2);
-        ctx.arc(size * 0.1, size * 0.3, endSize, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = '#8d6e63';
-        ctx.strokeStyle = '#5d4037';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.ellipse(0, -size * 0.1, size * 0.3, size * 0.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#f5f5f5';
-        ctx.strokeStyle = '#bdbdbd';
-        ctx.fillRect(-size * 0.05, size * 0.2, size * 0.1, size * 0.2);
-        ctx.strokeRect(-size * 0.05, size * 0.2, size * 0.1, size * 0.2);
-        ctx.beginPath();
-        ctx.arc(-size * 0.05, size * 0.4, size * 0.08, 0, Math.PI * 2);
-        ctx.arc(size * 0.05, size * 0.4, size * 0.08, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-      
-      ctx.restore();
-    };
 
     const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy) => {
       ctx.save();
@@ -2797,7 +2196,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         } else if (e.isItem) {
           // Item on ground
           const hover = Math.sin(animTimerRef.current * 2 + e.x) * 3;
-          drawItemIcon(ctx, e.type as ItemType, Math.round(e.x - 20), Math.round(e.y - 20 + hover), 40);
+          assets.draw(ctx, `items/${e.type}`, e.x - 20, e.y - 20 + hover, 40, 40);
         } else if (e.isEnemy) {
           drawEnemy(ctx, ent as Enemy);
         } else if (e.isAnimal) {
@@ -3254,7 +2653,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
                 ctx.scale(-1, 1);
               }
               ctx.rotate(rotation);
-              drawItemIcon(ctx, selectedItem.type, -toolSize/2, -toolSize/2, toolSize);
+              assets.draw(ctx, `items/${selectedItem.type}`, -toolSize / 2, -toolSize / 2, toolSize, toolSize);
               ctx.restore();
             }
 
@@ -3349,7 +2748,19 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         }
       }
 
-      drawHUD(ctx);
+      // HUD moved to React; publish a snapshot instead of drawing it here.
+      // publishHud compares before notifying, so this is cheap every frame.
+      publishHud({
+        health: state.player.health,
+        hunger: state.player.hunger,
+        maxHunger: MAX_HUNGER,
+        canSprint: state.player.hunger > 6,
+        defense: state.player.defense,
+        selectedSlot: state.player.selectedSlot,
+        hotbar: toHotbar(state.player.inventory, HOTBAR_SLOTS),
+        timeLabel: `${Math.floor(state.time / 60).toString().padStart(2, '0')}:${Math.floor(state.time % 60).toString().padStart(2, '0')}`,
+        message: state.message && Date.now() - state.message.time < 2000 ? state.message.text : null,
+      });
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -3693,6 +3104,14 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         <LoadingScreen loaded={assetProgress.loaded} total={assetProgress.total} />
       )}
 
+      {assetsReady && (
+        <Hud
+          onSelectSlot={(i) => {
+            stateRef.current.player.selectedSlot = i;
+          }}
+        />
+      )}
+
       <canvas
         ref={canvasRef}
         width={dimensions.width}
@@ -3852,366 +3271,3 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 }
 
 // --- UI Components ---
-
-
-const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, refreshUI: () => void, onClose: () => void }) => {
-  const [draggedItem, setDraggedItem] = useState<{ index: number, from: 'inventory' | 'equipment' | 'chest' | 'furnace', slot?: string } | null>(null);
-
-  const handleDrop = (toIndex: number, to: 'inventory' | 'equipment' | 'chest' | 'furnace', toSlot?: string) => {
-    if (!draggedItem) return;
-
-    const { index: fromIndex, from, slot: fromSlot } = draggedItem;
-    
-    let itemToMove: InventorySlot | null = null;
-    
-    // Get item from source
-    if (from === 'inventory') {
-      itemToMove = state.player.inventory[fromIndex];
-    } else if (from === 'equipment' && fromSlot) {
-      itemToMove = state.player.equipment[fromSlot as EquipmentSlotName];
-    } else if (from === 'chest' || from === 'furnace') {
-      const openChest = Array.from(state.resources.values()).flat().find(r => r.id === state.openChestId);
-      if (openChest && openChest.inventory) {
-        itemToMove = openChest.inventory[fromIndex];
-      }
-    }
-
-    if (!itemToMove) return;
-
-    // Logic for moving item
-    // This is a simplified version, you might want to handle stacking etc.
-    
-    // Remove from source
-    if (from === 'inventory') {
-      state.player.inventory[fromIndex] = null;
-    } else if (from === 'equipment' && fromSlot) {
-      state.player.equipment[fromSlot as EquipmentSlotName] = null;
-    } else if (from === 'chest' || from === 'furnace') {
-      const openChest = Array.from(state.resources.values()).flat().find(r => r.id === state.openChestId);
-      if (openChest && openChest.inventory) {
-        openChest.inventory[fromIndex] = null;
-      }
-    }
-
-    // Add to destination
-    if (to === 'inventory') {
-      const existing = state.player.inventory[toIndex];
-      if (existing && existing.type === itemToMove.type) {
-        existing.count += itemToMove.count;
-      } else {
-        state.player.inventory[toIndex] = itemToMove;
-      }
-    } else if (to === 'equipment' && toSlot) {
-      // Check if item is armor/backpack
-      const isArmor = itemToMove.type.includes('leather_') && !itemToMove.type.includes('backpack');
-      const isBackpack = itemToMove.type === 'leather_backpack';
-      
-      if ((isArmor && toSlot !== 'back') || (isBackpack && toSlot === 'back')) {
-         state.player.equipment[toSlot as EquipmentSlotName] = itemToMove;
-      } else {
-        // Return to inventory if invalid slot
-        // For now just swap or something
-      }
-    } else if (to === 'chest' || to === 'furnace') {
-      const openChest = Array.from(state.resources.values()).flat().find(r => r.id === state.openChestId);
-      if (openChest && openChest.inventory) {
-        openChest.inventory[toIndex] = itemToMove;
-      }
-    }
-
-    setDraggedItem(null);
-    refreshUI();
-  };
-
-  const openChest = state.openChestId ? Array.from(state.resources.values()).flat().find(r => r.id === state.openChestId) : null;
-  const currentInvRows = state.player.equipment.back ? MAIN_INV_ROWS + 2 : MAIN_INV_ROWS;
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-8"
-      onClick={onClose}
-    >
-      <motion.div 
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        className="flex flex-col gap-4 max-w-full max-h-full"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Crafting & Chest Panel */}
-        <div className="bg-[#8b5a2b] p-6 relative flex flex-col gap-4"
-             style={{
-               boxShadow: 'inset -4px -4px 0px 0px rgba(0,0,0,0.4), inset 4px 4px 0px 0px rgba(255,255,255,0.2), 0 0 0 4px #3e2723, 12px 12px 0px 0px rgba(0,0,0,0.3)',
-               minWidth: '800px'
-             }}>
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-xl font-mono font-bold text-[#2D1B0A] uppercase tracking-wider">
-              {openChest ? (openChest.type === 'furnace' ? 'Inventory & Furnace' : 'Inventory & Chest') : (state.isWorkbenchOpen ? 'Inventory & Workbench' : 'Inventory & Crafting')}
-            </h2>
-            <button onClick={onClose} className="text-[#8B0000] text-2xl font-bold hover:scale-110 transition-transform">X</button>
-          </div>
-
-          <div className="h-64 overflow-y-auto pr-2 custom-scrollbar">
-            {openChest ? (
-              openChest.type === 'furnace' ? (
-                <FurnaceUI 
-                  furnace={openChest} 
-                  handleDrop={handleDrop} 
-                  setDraggedItem={setDraggedItem} 
-                />
-              ) : (
-                <div className="grid grid-cols-9 gap-2">
-                  {(openChest.inventory || Array(27).fill(null)).map((slot, i) => (
-                    <SlotUI key={i} slot={slot} onDrop={() => handleDrop(i, 'chest')} onDragStart={() => setDraggedItem({ index: i, from: 'chest' })} />
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {CRAFTING_RECIPES.map((recipe) => (
-                  <RecipeUI key={recipe.id} recipe={recipe} state={state} refreshUI={refreshUI} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex gap-4">
-          {/* Equipment Panel */}
-          <div className="bg-[#8b5a2b] p-6 flex flex-col items-center gap-4 w-64"
-               style={{
-                 boxShadow: 'inset -4px -4px 0px 0px rgba(0,0,0,0.4), inset 4px 4px 0px 0px rgba(255,255,255,0.2), 0 0 0 4px #3e2723, 8px 8px 0px 0px rgba(0,0,0,0.3)'
-               }}>
-            <h2 className="text-lg font-mono font-bold text-[#2D1B0A] uppercase">Equipment</h2>
-            <div className="relative w-full h-64 flex items-center justify-center">
-               {/* Paper Doll */}
-               <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
-                  {/* Paper doll: the player sheet's first cell, taken from the atlas. */}
-                  <div
-                    className="w-32 h-32 pixelated"
-                    style={{
-                      backgroundImage: `url(/sprites/${PLAYER_FRAME.atlas}.png)`,
-                      backgroundPosition: `-${PLAYER_FRAME.x}px -${PLAYER_FRAME.y}px`,
-                      backgroundRepeat: 'no-repeat',
-                      imageRendering: 'pixelated',
-                    }}
-                  />
-               </div>
-               
-               {/* Slots around player */}
-               <div className="absolute top-0 left-1/2 -translate-x-1/2">
-                 <SlotUI slot={state.player.equipment.head} label="Head" onDrop={() => handleDrop(0, 'equipment', 'head')} onDragStart={() => setDraggedItem({ index: 0, from: 'equipment', slot: 'head' })} />
-               </div>
-               <div className="absolute top-1/2 left-0 -translate-y-1/2">
-                 <SlotUI slot={state.player.equipment.torso} label="Torso" onDrop={() => handleDrop(0, 'equipment', 'torso')} onDragStart={() => setDraggedItem({ index: 0, from: 'equipment', slot: 'torso' })} />
-               </div>
-               <div className="absolute top-1/2 right-0 -translate-y-1/2">
-                 <SlotUI slot={state.player.equipment.back} label="Back" onDrop={() => handleDrop(0, 'equipment', 'back')} onDragStart={() => setDraggedItem({ index: 0, from: 'equipment', slot: 'back' })} />
-               </div>
-               <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
-                 <SlotUI slot={state.player.equipment.legs} label="Legs" onDrop={() => handleDrop(0, 'equipment', 'legs')} onDragStart={() => setDraggedItem({ index: 0, from: 'equipment', slot: 'legs' })} />
-               </div>
-               <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
-                 <SlotUI slot={state.player.equipment.feet} label="Feet" onDrop={() => handleDrop(0, 'equipment', 'feet')} onDragStart={() => setDraggedItem({ index: 0, from: 'equipment', slot: 'feet' })} />
-               </div>
-            </div>
-            <div className="text-[#2D1B0A] font-mono text-sm font-bold">Defense: {state.player.defense}</div>
-          </div>
-
-          {/* Inventory Panel */}
-          <div className="bg-[#8b5a2b] p-6 flex-1"
-               style={{
-                 boxShadow: 'inset -4px -4px 0px 0px rgba(0,0,0,0.4), inset 4px 4px 0px 0px rgba(255,255,255,0.2), 0 0 0 4px #3e2723, 8px 8px 0px 0px rgba(0,0,0,0.3)'
-               }}>
-            <h2 className="text-lg font-mono font-bold text-[#2D1B0A] uppercase mb-4">Inventory</h2>
-            <div className="grid grid-cols-9 gap-2">
-              {state.player.inventory.slice(HOTBAR_SLOTS, HOTBAR_SLOTS + currentInvRows * 9).map((slot, i) => (
-                <SlotUI key={i} slot={slot} onDrop={() => handleDrop(i + HOTBAR_SLOTS, 'inventory')} onDragStart={() => setDraggedItem({ index: i + HOTBAR_SLOTS, from: 'inventory' })} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Hotbar Panel */}
-        <div className="bg-[#8b5a2b] p-6"
-             style={{
-               boxShadow: 'inset -4px -4px 0px 0px rgba(0,0,0,0.4), inset 4px 4px 0px 0px rgba(255,255,255,0.2), 0 0 0 4px #3e2723, 8px 8px 0px 0px rgba(0,0,0,0.3)'
-             }}>
-          <h2 className="text-lg font-mono font-bold text-[#2D1B0A] uppercase mb-4">Hotbar</h2>
-          <div className="flex gap-2 justify-center">
-            {state.player.inventory.slice(0, HOTBAR_SLOTS).map((slot, i) => (
-              <SlotUI key={i} slot={slot} isSelected={state.player.selectedSlot === i} onDrop={() => handleDrop(i, 'inventory')} onDragStart={() => setDraggedItem({ index: i, from: 'inventory' })} />
-            ))}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
-const SlotUI = ({ slot, label, onDrop, onDragStart, isSelected }: {
-  slot: InventorySlot | null | undefined;
-  label?: string;
-  onDrop?: () => void;
-  onDragStart?: () => void;
-  isSelected?: boolean;
-}) => {
-  return (
-    <div 
-      className={`w-16 h-16 bg-black/20 border-2 border-black/40 flex items-center justify-center relative ${isSelected ? 'border-white/60 bg-white/10' : ''}`}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDrop}
-    >
-      {label && !slot && <span className="text-white/30 text-[10px] uppercase font-mono">{label}</span>}
-      {slot && (
-        <motion.div
-          draggable
-          onDragStart={onDragStart}
-          className="w-14 h-14 flex items-center justify-center cursor-grab active:cursor-grabbing"
-        >
-          <ItemIcon type={slot.type} size={56} />
-          <span className="absolute bottom-1 right-1 text-white text-xs font-bold pointer-events-none" style={{ textShadow: '1px 1px 2px black' }}>
-            {slot.count}
-          </span>
-        </motion.div>
-      )}
-    </div>
-  );
-};
-
-const RecipeUI = ({ recipe, state, refreshUI }: {
-  recipe: Recipe;
-  state: GameState;
-  refreshUI: () => void;
-}) => {
-  const hasIngredients = (ingredients: { type: string, count: number }[]) => {
-    return ingredients.every(ing => {
-      const count = state.player.inventory.reduce((acc: number, slot: InventorySlot | null) => acc + (slot?.type === ing.type ? slot.count : 0), 0);
-      return count >= ing.count;
-    });
-  };
-
-  const canCraft = hasIngredients(recipe.ingredients) && (!recipe.requiresWorkbench || state.isWorkbenchOpen);
-
-  const handleCraft = () => {
-    if (!canCraft) return;
-
-    // Remove ingredients
-    recipe.ingredients.forEach((ing: Ingredient) => {
-      let remaining = ing.count;
-      for (let i = 0; i < state.player.inventory.length; i++) {
-        const slot = state.player.inventory[i];
-        if (slot?.type === ing.type) {
-          const take = Math.min(remaining, slot.count);
-          slot.count -= take;
-          remaining -= take;
-          if (slot.count <= 0) state.player.inventory[i] = null;
-          if (remaining <= 0) break;
-        }
-      }
-    });
-
-    // Add output
-    let remainingOutput = recipe.count;
-    for (let i = 0; i < state.player.inventory.length; i++) {
-      const slot = state.player.inventory[i];
-      if (slot?.type === recipe.output && slot.count < 64) {
-        const add = Math.min(remainingOutput, 64 - slot.count);
-        slot.count += add;
-        remainingOutput -= add;
-        if (remainingOutput <= 0) break;
-      } else if (!slot) {
-        state.player.inventory[i] = { type: recipe.output, count: Math.min(remainingOutput, 64) };
-        remainingOutput -= state.player.inventory[i]!.count;
-        if (remainingOutput <= 0) break;
-      }
-    }
-
-    refreshUI();
-  };
-
-  return (
-    <div 
-      onClick={handleCraft}
-      className={`p-2 flex gap-3 items-center border-2 border-black/40 cursor-pointer transition-colors ${canCraft ? 'bg-black/10 hover:bg-black/20' : 'bg-black/30 opacity-60 cursor-not-allowed'}`}
-    >
-      <ItemIcon type={recipe.output} size={40} />
-      <div className="flex flex-col">
-        <span className="text-[#2D1B0A] font-mono font-bold text-xs uppercase">{recipe.id.replace('_', ' ')}</span>
-        <span className="text-[#2D1B0A] font-mono text-[9px] opacity-70">
-          {recipe.ingredients.map((ing: Ingredient) => `${ing.count} ${ing.type}`).join(', ')}
-        </span>
-      </div>
-    </div>
-  );
-};
-
-const FurnaceUI = ({ furnace, handleDrop, setDraggedItem }: {
-  furnace: Resource;
-  handleDrop: (index: number, target: 'furnace') => void;
-  setDraggedItem: (v: { index: number; from: 'furnace' }) => void;
-}) => {
-  return (
-    <div className="flex flex-col items-center gap-8 py-4">
-      <div className="flex items-center gap-12">
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-white/50 text-[10px] uppercase font-mono">Input</span>
-            <SlotUI 
-              slot={furnace.inventory?.[0]} 
-              onDrop={() => handleDrop(0, 'furnace')} 
-              onDragStart={() => setDraggedItem({ index: 0, from: 'furnace' })} 
-            />
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-white/50 text-[10px] uppercase font-mono">Fuel</span>
-            <SlotUI 
-              slot={furnace.inventory?.[1]} 
-              onDrop={() => handleDrop(1, 'furnace')} 
-              onDragStart={() => setDraggedItem({ index: 1, from: 'furnace' })} 
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-32 h-6 bg-black/40 border-2 border-black/60 relative overflow-hidden">
-            {(furnace.smeltTimer ?? 0) > 0 && (
-              <motion.div 
-                className="absolute inset-y-0 left-0 bg-orange-500"
-                initial={{ width: 0 }}
-                animate={{ width: `${((furnace.smeltTimer ?? 0) / 600) * 100}%` }}
-                transition={{ type: 'spring', stiffness: 50, damping: 20 }}
-              />
-            )}
-          </div>
-          <div className="text-orange-500 text-[10px] font-mono font-bold uppercase animate-pulse">Smelting...</div>
-        </div>
-
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-white/50 text-[10px] uppercase font-mono">Output</span>
-          <SlotUI 
-            slot={furnace.inventory?.[2]} 
-            onDrop={() => handleDrop(2, 'furnace')} 
-            onDragStart={() => setDraggedItem({ index: 2, from: 'furnace' })} 
-          />
-        </div>
-      </div>
-
-      {(furnace.fuelTimer ?? 0) > 0 && (
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-16 h-2 bg-black/40 border border-black/60 relative overflow-hidden">
-            <motion.div 
-              className="absolute inset-y-0 left-0 bg-red-600"
-              initial={{ width: 0 }}
-              animate={{ width: `${((furnace.fuelTimer ?? 0) / (furnace.maxFuelTimer || 1)) * 100}%` }}
-              transition={{ type: 'spring', stiffness: 50, damping: 20 }}
-            />
-          </div>
-          <span className="text-red-500 text-[8px] font-mono font-bold uppercase">Fuel</span>
-        </div>
-      )}
-    </div>
-  );
-};

@@ -28,7 +28,9 @@ export const TILE = 128;
 const MASK_RES = CHUNK_SIZE / 16;
 
 /** Above this fbm value, ground turns to dirt. */
-const DIRT_THRESHOLD = 0.35;
+// Raised from 0.35: at that value most worlds generated as bare dirt with only
+// occasional grass, which reads as a wasteland rather than a meadow.
+const DIRT_THRESHOLD = 0.55;
 const DIRT_RAMP = 0.1;
 
 /** Above this, the chunk is "blighted" and gets a dark overlay. */

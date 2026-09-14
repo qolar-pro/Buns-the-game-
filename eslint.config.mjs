@@ -55,6 +55,9 @@ export default [
       // Canvas draw code legitimately reads many unused destructured values;
       // an underscore prefix marks those deliberate.
       'no-unused-vars': 'off',
+      // TypeScript already reports undefined identifiers, and the core rule
+      // does not know about DOM lib types such as CanvasImageSource.
+      'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
