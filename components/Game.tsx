@@ -11,6 +11,10 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { Hud } from '@/components/ui/Hud';
 import { InventoryOverlay } from '@/components/ui/InventoryOverlay';
 import { publishHud, toHotbar } from '@/src/game/core/HudStore';
+import { applySave, serialize, toSaveFile } from '@/src/game/save/serialize';
+import { readSlot as loadSlot, writeSlot } from '@/src/game/save/storage';
+import { SaveError } from '@/src/game/save/schema';
+import { SaveIndicator } from '@/components/ui/SaveIndicator';
 import { FRAMES } from '@/src/game/assets/frames';
 
 /** First cell of the player sheet, used for the equipment paper doll. */
@@ -21,7 +25,7 @@ import { buildColliders, idForEntity } from '@/src/game/assets/colliders';
 import { metaFor } from '@/src/game/assets/manifest';
 import { renderChunkTerrain as drawChunkTerrain } from '@/src/game/render/TerrainRenderer';
 import {
-  PLAYER_SIZE, PLAYER_SPEED, ROCK_COLOR, ROCK_SIZE, GLOBAL_ASSET_SCALE,
+  PLAYER_SIZE, PLAYER_SPEED, ROCK_COLOR, ROCK_SIZE,
   CHUNK_SIZE, HOTBAR_SLOTS, MAIN_INV_ROWS, MAIN_INV_COLS,
   SLOT_SIZE, SLOT_MARGIN, MAX_HUNGER,
 } from '@/src/game/core/config';
@@ -53,6 +57,11 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [isPausedUI, setIsPausedUI] = useState(false);
   const [assetsReady, setAssetsReady] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Slot identity and accumulated playtime, carried across autosaves. */
+  const saveMetaRef = useRef({ id: loadedSaveId ?? 'slot-1', name: 'Slot 1', createdAt: Date.now(), playtimeMs: 0 });
+  const sessionStartRef = useRef(Date.now());
   const [assetProgress, setAssetProgress] = useState({ loaded: 0, total: 5 });
   const [_uiTick, setUiTick] = useState(0);
   const refreshUI = () => setUiTick(t => t + 1);
@@ -858,25 +867,27 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     startNewGameRef.current = startNewGame;
 
     if (loadedSaveId) {
-      const savedData = localStorage.getItem('save_' + loadedSaveId);
-      if (savedData) {
-        try {
-          const parsed = JSON.parse(savedData);
-          stateRef.current.player = parsed.player;
-          if (!stateRef.current.player.equipment) {
-            stateRef.current.player.equipment = { head: null, torso: null, legs: null, feet: null, back: null };
-          }
-          stateRef.current.resources = new Map(parsed.resources);
-          stateRef.current.items = parsed.items;
-          stateRef.current.animals = parsed.animals;
-          stateRef.current.time = parsed.time;
-        } catch (e) {
-          debugError("Failed to load save", e);
-          startNewGame();
-        }
-      } else {
-        startNewGame();
-      }
+      // Loading is async now (IndexedDB), so start a world immediately and let
+      // the save overwrite it once read. That keeps the first frame drawable.
+      startNewGame();
+      loadSlot(loadedSaveId)
+        .then((raw) => {
+          if (!raw) throw new SaveError('That save could not be found.');
+          const save = applySave(stateRef.current, raw);
+          reseedNoise(save.seed);
+          saveMetaRef.current = {
+            id: loadedSaveId,
+            name: save.name,
+            createdAt: save.createdAt,
+            playtimeMs: save.playtimeMs,
+          };
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof SaveError ? err.message : 'That save could not be loaded.';
+          const detail = err instanceof SaveError ? err.detail : String(err);
+          debugError('Failed to load save', err);
+          setLoadError(detail ? `${message} (${detail})` : message);
+        });
     } else {
       startNewGame();
     }
@@ -3053,18 +3064,69 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     };
   }, []);
 
+  /**
+   * Write the current world to a slot. Shared by the pause menu and autosave so
+   * there is only one serialisation path.
+   */
+  const persist = React.useCallback(async (slotId?: string) => {
+    const meta = saveMetaRef.current;
+    const id = slotId ?? meta.id;
+    const save = serialize(stateRef.current, {
+      name: meta.name,
+      createdAt: meta.createdAt,
+      playtimeMs: meta.playtimeMs + (Date.now() - sessionStartRef.current),
+    });
+    await writeSlot(id, save);
+    saveMetaRef.current = { ...meta, id, playtimeMs: save.playtimeMs };
+    sessionStartRef.current = Date.now();
+    return save;
+  }, []);
+
+  // Autosave, so a closed tab does not cost an hour of play.
+  React.useEffect(() => {
+    if (!assetsReady) return;
+    const id = window.setInterval(() => {
+      setSaveState('saving');
+      persist()
+        .then(() => {
+          setSaveState('saved');
+          window.setTimeout(() => setSaveState('idle'), 1500);
+        })
+        .catch((err: unknown) => {
+          debugError('Autosave failed', err);
+          setSaveState('error');
+        });
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [assetsReady, persist]);
+
   const handleSaveGame = () => {
-    const state = stateRef.current;
-    const saveData = {
-      player: state.player,
-      resources: Array.from(state.resources.entries()),
-      items: state.items,
-      animals: state.animals,
-      time: state.time
-    };
-    const saveName = `save_${new Date().toLocaleString().replace(/[/, :]/g, '-')}`;
-    localStorage.setItem(saveName, JSON.stringify(saveData));
-    alert('Game Saved! (' + saveName.replace('save_', '') + ')');
+    setSaveState('saving');
+    persist()
+      .then(() => {
+        setSaveState('saved');
+        window.setTimeout(() => setSaveState('idle'), 1800);
+      })
+      .catch((err: unknown) => {
+        debugError('Save failed', err);
+        setSaveState('error');
+      });
+  };
+
+  /** Download the current world, so a save can survive a cleared browser. */
+  const handleExportSave = () => {
+    const save = serialize(stateRef.current, {
+      name: saveMetaRef.current.name,
+      createdAt: saveMetaRef.current.createdAt,
+      playtimeMs: saveMetaRef.current.playtimeMs,
+    });
+    const blob = new Blob([toSaveFile(save)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `buns-${saveMetaRef.current.id}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const MenuButton = ({ onClick, children }: { onClick: () => void, children: React.ReactNode }) => (
@@ -3104,6 +3166,27 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         <LoadingScreen loaded={assetProgress.loaded} total={assetProgress.total} />
       )}
 
+      <SaveIndicator state={saveState} />
+
+      {loadError && (
+        <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/80 p-6">
+          <div className="max-w-lg border-2 border-[#8e2020] bg-[#1e2629] p-6 font-mono text-sm text-white">
+            <h2 className="mb-3 text-lg font-bold text-[#ff9c9c]">Could not load that save</h2>
+            <p className="mb-4 text-white/80">{loadError}</p>
+            <p className="mb-5 text-xs text-white/50">
+              The world you are in now is a fresh one; your save file has not been overwritten.
+            </p>
+            <button
+              type="button"
+              onClick={() => setLoadError(null)}
+              className="border-2 border-[#7c4d23] px-4 py-2 text-[#fed859] hover:bg-white/10"
+            >
+              Continue in a new world
+            </button>
+          </div>
+        </div>
+      )}
+
       {assetsReady && (
         <Hud
           onSelectSlot={(i) => {
@@ -3141,6 +3224,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
               </h2>
               <MenuButton onClick={() => { stateRef.current.isPaused = false; setIsPausedUI(false); }}>Resume</MenuButton>
               <MenuButton onClick={handleSaveGame}>Save Game</MenuButton>
+              <MenuButton onClick={handleExportSave}>Export Save</MenuButton>
               <MenuButton onClick={() => setPauseMenuState('settings')}>Settings</MenuButton>
               <MenuButton onClick={() => { if(onExitToMenu) onExitToMenu(); }}>Main Menu</MenuButton>
             </div>

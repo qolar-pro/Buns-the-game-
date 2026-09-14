@@ -104,11 +104,23 @@ check('pause menu opens', paused);
 if (paused) {
   await page.getByText('Save Game', { exact: true }).click();
   await wait(1200);
-  const saved = await page.evaluate(() => {
-    for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i).startsWith('save_')) return true;
-    return false;
-  });
-  check('save writes to storage', saved);
+  // Saves live in IndexedDB now, not localStorage.
+  const saved = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('buns-the-game');
+        req.onerror = () => resolve(false);
+        req.onsuccess = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('saves')) return resolve(false);
+          const all = db.transaction('saves', 'readonly').objectStore('saves').getAll();
+          all.onsuccess = () => resolve(all.result.length > 0);
+          all.onerror = () => resolve(false);
+        };
+        setTimeout(() => resolve(false), 5000);
+      }),
+  );
+  check('save writes to storage (IndexedDB)', saved);
 }
 
 check('no missing assets (404s)', missing404.size === 0, `${missing404.size} missing: ${[...missing404].slice(0, 5).join(', ')}`);

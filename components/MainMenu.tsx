@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { listSlots } from '@/src/game/save/storage';
+import type { SlotSummary } from '@/src/game/save/schema';
+import { debugError } from '@/lib/debug';
 
 interface MainMenuProps {
   onStartGame: () => void;
@@ -9,22 +12,26 @@ interface MainMenuProps {
 
 export default function MainMenu({ onStartGame, onLoadGame }: MainMenuProps) {
   const [activeMenu, setActiveMenu] = useState<'main' | 'load' | 'options'>('main');
-  const [saves, setSaves] = useState<string[]>([]);
+  const [saves, setSaves] = useState<SlotSummary[]>([]);
   const [volume, setVolume] = useState(50);
   const [resolution, setResolution] = useState('100%');
 
   useEffect(() => {
-    // Check for existing save files in localStorage
-    if (typeof window !== 'undefined') {
-      const foundSaves = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('save_')) {
-          foundSaves.push(key.replace('save_', ''));
-        }
-      }
-      setSaves(foundSaves);
-    }
+    if (activeMenu !== 'load') return;
+    // Saves live in IndexedDB now; listSlots also surfaces any pre-overhaul
+    // localStorage saves so nothing appears to have been lost.
+    let cancelled = false;
+    listSlots()
+      .then((found) => {
+        if (!cancelled) setSaves(found);
+      })
+      .catch((err: unknown) => {
+        debugError('Could not list saves', err);
+        if (!cancelled) setSaves([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [activeMenu]);
 
   // Reusable Button Component for consistent pixel-art styling
@@ -110,12 +117,17 @@ export default function MainMenu({ onStartGame, onLoadGame }: MainMenuProps) {
             ) : (
               saves.map(save => (
                 <button 
-                  key={save}
-                  onClick={() => onLoadGame(save)}
+                  key={save.id}
+                  onClick={() => onLoadGame(save.id)}
                   className="w-full py-3 px-4 bg-[#6b421c] hover:bg-[#a06b35] text-white font-mono text-left transition-colors"
                   style={{ boxShadow: 'inset -2px -2px 0px rgba(0,0,0,0.5), inset 2px 2px 0px rgba(255,255,255,0.2), 0 0 0 2px #3e2723' }}
                 >
-                  {save}
+                  <span className="block">{save.name}</span>
+                  <span className="block text-xs text-white/60">
+                    {save.updatedAt ? new Date(save.updatedAt).toLocaleString() : 'older save'}
+                    {save.playtimeMs > 0 && ` · ${Math.round(save.playtimeMs / 60000)} min played`}
+                    {save.version === 0 && ' · will be upgraded on load'}
+                  </span>
                 </button>
               ))
             )}
