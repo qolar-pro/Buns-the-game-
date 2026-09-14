@@ -25,7 +25,7 @@ const U = (id, w, h, prompt) => ({ id, cat: 'ui', atlas: 'ui', w, h, gw: 1024, g
 
 // --- Terrain (6) — must tile seamlessly in both axes -----------------------
 const terrain = [
-  T('grass', 'lush green meadow grass turf texture, short blades, subtle colour variation'),
+  T('grass', 'a continuous field of short lush green grass blades viewed from directly above, dense even turf, natural random growth, no rows, no grid, no tiles, no paths'),
   T('grass_variant', 'green meadow grass turf with small dry patches and a few tiny yellow wildflowers'),
   T('dirt', 'bare brown earth soil texture, fine clods and small stones'),
   T('sand', 'pale golden beach sand texture, fine even grain, gentle ripples'),
@@ -121,6 +121,7 @@ const items = [
   I('scrap_metal', 'a twisted bundle of rusty scrap metal sheets and bent rods'),
   I('copper_wiring', 'a neat coil of bright orange copper wire'),
   I('iron_ingot', 'a single polished cold blue-grey iron ingot bar with a metallic highlight'),
+  I('iron_ore', 'a grey rock chunk streaked with rusty orange-brown iron ore veins'),
 ];
 
 // --- Characters -------------------------------------------------------------

@@ -116,6 +116,37 @@ export class AssetRegistry {
   }
 
   /**
+   * A frame as a standalone drawable.
+   *
+   * The engine's existing draw calls take a whole image and scale it; this hands
+   * them one, cut from the atlas and cached, so sprites can be addressed by
+   * manifest id without rewriting every draw call at the same time. Frames are
+   * extracted lazily on first use and kept.
+   */
+  private spriteCache = new Map<string, HTMLCanvasElement>();
+
+  sprite(id: string): HTMLCanvasElement | null {
+    const cached = this.spriteCache.get(id);
+    if (cached) return cached;
+
+    const frame = this.get(id);
+    if (!frame) return null;
+    const img = this.image(frame);
+    if (!img) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = frame.w;
+    canvas.height = frame.h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+
+    this.spriteCache.set(id, canvas);
+    return canvas;
+  }
+
+  /**
    * Draw one cell of a sprite sheet. `col` and `row` are clamped to the grid so
    * an animation frame that runs past the end cannot sample a neighbour.
    */

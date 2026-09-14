@@ -5,7 +5,7 @@
  * pure systems in src/game/systems operate on.
  */
 export type EntityType = 'tree' | 'rock' | 'bush' | 'sapling' | 'trunk' | 'coal_ore' | 'torch' | 'workbench' | 'campfire' | 'branch' | 'small_rock' | 'grass' | 'bed' | 'chest' | 'furnace' | 'antenna' | 'fence' | 'iron_ore';
-export type ItemType = 'wood' | 'stone' | 'sapling' | 'coal' | 'stick' | 'workbench' | 'campfire' | 'torch' | 'wheat_seeds' | 'wooden_axe' | 'wooden_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'wooden_sword' | 'stone_sword' | 'raw_beef' | 'leather' | 'raw_pork' | 'mutton' | 'wool' | 'raw_chicken' | 'feather' | 'egg' | 'bed' | 'leather_cap' | 'leather_tunic' | 'leather_pants' | 'leather_boots' | 'leather_backpack' | 'chest' | 'furnace' | 'cooked_beef' | 'cooked_pork' | 'cooked_mutton' | 'cooked_chicken' | 'scrap_metal' | 'copper_wiring' | 'iron_ingot' | 'iron_axe' | 'iron_pickaxe' | 'iron_sword' | 'antenna' | 'fence' | 'bread' | 'meat_pie' | 'omelet' | 'wheat';
+export type ItemType = 'wood' | 'stone' | 'sapling' | 'coal' | 'stick' | 'workbench' | 'campfire' | 'torch' | 'wheat_seeds' | 'wooden_axe' | 'wooden_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'wooden_sword' | 'stone_sword' | 'raw_beef' | 'leather' | 'raw_pork' | 'mutton' | 'wool' | 'raw_chicken' | 'feather' | 'egg' | 'bed' | 'leather_cap' | 'leather_tunic' | 'leather_pants' | 'leather_boots' | 'leather_backpack' | 'chest' | 'furnace' | 'cooked_beef' | 'cooked_pork' | 'cooked_mutton' | 'cooked_chicken' | 'scrap_metal' | 'copper_wiring' | 'iron_ore' | 'iron_ingot' | 'iron_axe' | 'iron_pickaxe' | 'iron_sword' | 'antenna' | 'fence' | 'bread' | 'meat_pie' | 'omelet' | 'wheat';
 
 export interface Ingredient {
   type: ItemType;

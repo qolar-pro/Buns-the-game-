@@ -5,24 +5,34 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpriteColliderGenerator, CollisionLayer, ColliderShape, Point } from '../lib/SpriteCollider';
 import { soundManager } from '../lib/SoundManager';
-import { debug, debugError } from '@/lib/debug';
+import { debugError } from '@/lib/debug';
+import { assets } from '@/src/game/assets/AssetRegistry';
+import { ItemIcon } from '@/components/ui/ItemIcon';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { FRAMES } from '@/src/game/assets/frames';
+
+/** First cell of the player sheet, used for the equipment paper doll. */
+const PLAYER_FRAME = FRAMES['characters/player'];
+/** Sprites are atlas-backed canvases now, not <img> elements. */
+type Sprite = HTMLCanvasElement;
+import { buildColliders, idForEntity } from '@/src/game/assets/colliders';
+import { renderChunkTerrain as drawChunkTerrain } from '@/src/game/render/TerrainRenderer';
 import {
   PLAYER_SIZE, PLAYER_SPEED, TREE_TRUNK, ROCK_COLOR, ROCK_SIZE, GLOBAL_ASSET_SCALE,
-  CHUNK_SIZE, INVENTORY_SLOTS, HOTBAR_SLOTS, MAIN_INV_ROWS, MAIN_INV_COLS,
-  SLOT_SIZE, SLOT_MARGIN, MAX_HUNGER, SMELT_RECIPES, FUEL_VALUES, SMELT_TIME,
+  CHUNK_SIZE, HOTBAR_SLOTS, MAIN_INV_ROWS, MAIN_INV_COLS,
+  SLOT_SIZE, SLOT_MARGIN, MAX_HUNGER,
 } from '@/src/game/core/config';
-import { reseedNoise, noise2D, fbm, hash } from '@/src/game/world/noise';
+import { reseedNoise, fbm, hash } from '@/src/game/world/noise';
 import { CRAFTING_RECIPES } from '@/src/game/core/recipes';
 import {
   addToInventory as invAdd,
   removeFromInventory as invRemove,
-  hasIngredients as invHas,
 } from '@/src/game/systems/inventory';
 import { craftItem as craft } from '@/src/game/systems/crafting';
 import { updateSmelting } from '@/src/game/systems/smelting';
 import type {
-  EntityType, ItemType, Ingredient, Recipe, EquipmentSlotName, Equipment,
-  AnimalType, AnimalState, Animal, InventorySlot, Resource, Enemy, DroppedItem,
+  EntityType, ItemType, Ingredient, Recipe, EquipmentSlotName,
+  AnimalType, Animal, InventorySlot, Resource, Enemy,
   RenderEntity, Particle, GameState,
 } from '@/src/game/core/types';
 
@@ -40,6 +50,8 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [isPausedUI, setIsPausedUI] = useState(false);
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [assetProgress, setAssetProgress] = useState({ loaded: 0, total: 5 });
   const [_uiTick, setUiTick] = useState(0);
   const refreshUI = () => setUiTick(t => t + 1);
   const [pauseMenuState, setPauseMenuState] = useState<'main' | 'settings'>('main');
@@ -104,186 +116,111 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
   const chunkCanvasesRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
 
   const keysRef = useRef<Set<string>>(new Set());
-  const spriteRef = useRef<HTMLImageElement | null>(null);
+  const spriteRef = useRef<Sprite | null>(null);
   
   // Tree Stage Refs
-  const saplingImgRef = useRef<HTMLImageElement | null>(null);
-  const smallTreeImgRef = useRef<HTMLImageElement | null>(null);
-  const treeImgRef = useRef<HTMLImageElement | null>(null);
-  const trunkImgRef = useRef<HTMLImageElement | null>(null);
-  const bushImgRef = useRef<HTMLImageElement | null>(null);
-  const grassTilesRef = useRef<HTMLImageElement | null>(null);
-  const dirtTilesRef = useRef<HTMLImageElement | null>(null);
-  const woodItemImgRef = useRef<HTMLImageElement | null>(null);
-  const stoneItemImgRef = useRef<HTMLImageElement | null>(null);
-  const coalImgRef = useRef<HTMLImageElement | null>(null);
-  const coalOreImgRef = useRef<HTMLImageElement | null>(null);
-  const stickImgRef = useRef<HTMLImageElement | null>(null);
-  const torchImgRef = useRef<HTMLImageElement | null>(null);
-  const workbenchImgRef = useRef<HTMLImageElement | null>(null);
-  const chestImgRef = useRef<HTMLImageElement | null>(null);
-  const furnaceImgRef = useRef<HTMLImageElement | null>(null);
-  const antennaImgRef = useRef<HTMLImageElement | null>(null);
-  const fenceImgRef = useRef<HTMLImageElement | null>(null);
-  const ironOreImgRef = useRef<HTMLImageElement | null>(null);
-  const campfire1ImgRef = useRef<HTMLImageElement | null>(null);
-  const campfire2ImgRef = useRef<HTMLImageElement | null>(null);
-  const woodenBoardImgRef = useRef<HTMLImageElement | null>(null);
-  const rockImgRefs = useRef<HTMLImageElement[]>([]);
+  const saplingImgRef = useRef<Sprite | null>(null);
+  const smallTreeImgRef = useRef<Sprite | null>(null);
+  const treeImgRef = useRef<Sprite | null>(null);
+  const trunkImgRef = useRef<Sprite | null>(null);
+  const bushImgRef = useRef<Sprite | null>(null);
+  const grassTilesRef = useRef<Sprite | null>(null);
+  const dirtTilesRef = useRef<Sprite | null>(null);
+  const grassVariantTilesRef = useRef<Sprite | null>(null);
+  const woodItemImgRef = useRef<Sprite | null>(null);
+  const stoneItemImgRef = useRef<Sprite | null>(null);
+  const coalImgRef = useRef<Sprite | null>(null);
+  const coalOreImgRef = useRef<Sprite | null>(null);
+  const stickImgRef = useRef<Sprite | null>(null);
+  const torchImgRef = useRef<Sprite | null>(null);
+  const workbenchImgRef = useRef<Sprite | null>(null);
+  const chestImgRef = useRef<Sprite | null>(null);
+  const furnaceImgRef = useRef<Sprite | null>(null);
+  const antennaImgRef = useRef<Sprite | null>(null);
+  const fenceImgRef = useRef<Sprite | null>(null);
+  const ironOreImgRef = useRef<Sprite | null>(null);
+  const campfire1ImgRef = useRef<Sprite | null>(null);
+  const campfire2ImgRef = useRef<Sprite | null>(null);
+  const woodenBoardImgRef = useRef<Sprite | null>(null);
+  const rockImgRefs = useRef<(Sprite | null)[]>([]);
   const collidersRef = useRef<Map<string, ColliderShape>>(new Map());
   const debugCollidersRef = useRef(false);
   const [debugColliders, setDebugColliders] = useState(false);
   
   // Tool Image Refs
-  const woodAxeImgRef = useRef<HTMLImageElement | null>(null);
-  const woodPickaxeImgRef = useRef<HTMLImageElement | null>(null);
-  const woodSwordImgRef = useRef<HTMLImageElement | null>(null);
-  const stoneAxeImgRef = useRef<HTMLImageElement | null>(null);
-  const stonePickaxeImgRef = useRef<HTMLImageElement | null>(null);
-  const stoneSwordImgRef = useRef<HTMLImageElement | null>(null);
+  const woodAxeImgRef = useRef<Sprite | null>(null);
+  const woodPickaxeImgRef = useRef<Sprite | null>(null);
+  const woodSwordImgRef = useRef<Sprite | null>(null);
+  const stoneAxeImgRef = useRef<Sprite | null>(null);
+  const stonePickaxeImgRef = useRef<Sprite | null>(null);
+  const stoneSwordImgRef = useRef<Sprite | null>(null);
   
   // Animal Sprite Refs
-  const chickenImgRef = useRef<HTMLImageElement | null>(null);
-  const cowImgRef = useRef<HTMLImageElement | null>(null);
-  const pigImgRef = useRef<HTMLImageElement | null>(null);
-  const sheepImgRef = useRef<HTMLImageElement | null>(null);
+  const chickenImgRef = useRef<Sprite | null>(null);
+  const cowImgRef = useRef<Sprite | null>(null);
+  const pigImgRef = useRef<Sprite | null>(null);
+  const sheepImgRef = useRef<Sprite | null>(null);
 
   useEffect(() => {
     // Load Farmer Sprite
-    const sprite = new Image();
-    sprite.src = '/farmer_spritesheet.png';
-    sprite.onload = () => {
-      spriteRef.current = sprite;
-    };
-
     // Load Tree Stage Sprites
-    const loadImg = (src: string, ref: React.MutableRefObject<HTMLImageElement | null>) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous'; // Ensure we can read pixels
-      img.src = src;
-      img.onload = () => { 
-        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-          ref.current = img; 
-          // Automatically generate collider for the loaded image
-          const isObstacle = src.includes('tree') || src.includes('rock') || src.includes('trunk') || src.includes('workbench') || src.includes('campfire') || src.includes('torch') || src.includes('coalore') || src.includes('chest') || src.includes('furnace');
-          const isInteractable = src.includes('stick') || src.includes('sapling') || src.includes('bush') || src.includes('small_rock') || src.includes('coal') || src.includes('wooditem') || src.includes('stoneitem');
-          const isAnimal = src.includes('sprite') || src.includes('animation');
-          const type = isObstacle ? 'obstacle' : (isInteractable ? 'interactable' : 'animal');
-          const layer = isObstacle || isAnimal ? CollisionLayer.SOLID : (isInteractable ? CollisionLayer.ITEM : CollisionLayer.ANIMAL);
-          
-          // Determine physics height percentage
-          let physicsHeight = 1.0;
-          if (src.includes('tree')) physicsHeight = 0.2; // Only trunk is solid
-          else if (src.includes('stick') || src.includes('small_rock') || src.includes('sapling')) physicsHeight = 0.5;
-          
-          if (isAnimal) {
-            // Smart Sprite Processor: Use 3x4 grid for animal spritesheets
-            const cols = 3;
-            const rows = 4;
-            const cellWidth = img.naturalWidth / cols;
-            const cellHeight = img.naturalHeight / rows;
-            
-            const _hasLabelRow = false;
-            const _hasLabelCol = false;
-            const labelHeight = 0;
-            const _labelCols = 0;
-            const _animCols = cols;
+    // Atlases replace the 32 individual image loads: five requests instead of
+    // thirty-seven, and sprites are addressed by manifest id rather than by
+    // filename. Colliders come from the authored manifest, so regenerating art
+    // can no longer change physics.
+    collidersRef.current = buildColliders();
 
-            // Use the Smart Collider Generator
-            const startX = 0;
-            const startY = 0;
-
-            const frameCanvas = document.createElement('canvas');
-            frameCanvas.width = cellWidth;
-            frameCanvas.height = cellHeight;
-            const frameCtx = frameCanvas.getContext('2d');
-            if (frameCtx) {
-              frameCtx.drawImage(img, startX, startY, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight);
-              const frameImg = new Image();
-              frameImg.src = frameCanvas.toDataURL();
-              frameImg.onload = () => {
-                SpriteColliderGenerator.generateSmartCollider(frameImg, type, layer, {
-                  cellWidth,
-                  cellHeight,
-                  labelHeight,
-                  charWidth: cellWidth,
-                  charHeight: cellHeight - labelHeight
-                }).then(shape => {
-                  collidersRef.current.set(src, shape);
-                  debug(`Smart Collider generated for ${src}: ${shape.points.length} vertices (Labels Ignored)`);
-                }).catch(err => {
-                  debugError(`Smart Collider failed for ${src}:`, err);
-                });
-              };
-            }
-          } else {
-            SpriteColliderGenerator.generateFromImage(img, type, layer, 1.0, physicsHeight).then(shape => {
-              collidersRef.current.set(src, shape);
-              debug(`Generated collider for ${src}: ${shape.points.length} points`);
-            }).catch(err => {
-              debugError(`Failed to generate collider for ${src}:`, err);
-            });
-          }
-        }
-      };
-      img.onerror = () => {
-        ref.current = null;
-      };
+    const bindSprites = () => {
+      const s = (id: string) => assets.sprite(id);
+      saplingImgRef.current = s('world/sapling');
+      smallTreeImgRef.current = s('world/small_tree');
+      treeImgRef.current = s('world/tree');
+      trunkImgRef.current = s('world/trunk');
+      bushImgRef.current = s('world/bush');
+      grassTilesRef.current = s('terrain/grass');
+      grassVariantTilesRef.current = s('terrain/grass_variant');
+      dirtTilesRef.current = s('terrain/dirt');
+      woodItemImgRef.current = s('items/wood');
+      stoneItemImgRef.current = s('items/stone');
+      coalImgRef.current = s('items/coal');
+      coalOreImgRef.current = s('world/coal_ore');
+      stickImgRef.current = s('items/stick');
+      torchImgRef.current = s('world/torch');
+      workbenchImgRef.current = s('world/workbench');
+      chestImgRef.current = s('world/chest');
+      furnaceImgRef.current = s('world/furnace');
+      campfire1ImgRef.current = s('world/campfire_1');
+      campfire2ImgRef.current = s('world/campfire_2');
+      woodenBoardImgRef.current = s('terrain/wood_floor');
+      antennaImgRef.current = s('world/antenna');
+      fenceImgRef.current = s('world/fence');
+      ironOreImgRef.current = s('world/iron_ore');
+      woodAxeImgRef.current = s('items/wooden_axe');
+      woodPickaxeImgRef.current = s('items/wooden_pickaxe');
+      woodSwordImgRef.current = s('items/wooden_sword');
+      stoneAxeImgRef.current = s('items/stone_axe');
+      stonePickaxeImgRef.current = s('items/stone_pickaxe');
+      stoneSwordImgRef.current = s('items/stone_sword');
+      spriteRef.current = s('characters/player');
+      cowImgRef.current = s('characters/cow');
+      pigImgRef.current = s('characters/pig');
+      sheepImgRef.current = s('characters/sheep');
+      chickenImgRef.current = s('characters/chicken');
+      for (let i = 1; i <= 9; i++) {
+        rockImgRefs.current[i - 1] = s(`world/rock_${'abc'[(i - 1) % 3]}`);
+      }
     };
 
-    loadImg('/sapling.png', saplingImgRef);
-    loadImg('/small_tree.png', smallTreeImgRef);
-    loadImg('/tree.png', treeImgRef);
-    loadImg('/trunk.png', trunkImgRef);
-    loadImg('/bush.png', bushImgRef);
-    loadImg('/grass.png', grassTilesRef);
-    loadImg('/dirt.png', dirtTilesRef);
-    loadImg('/wooditem.png', woodItemImgRef);
-    loadImg('/stoneitem.png', stoneItemImgRef);
-    loadImg('/coal.png', coalImgRef);
-    loadImg('/coalore.png', coalOreImgRef);
-    loadImg('/stick.png', stickImgRef);
-    loadImg('/torch.png', torchImgRef);
-    loadImg('/workbench.png', workbenchImgRef);
-    loadImg('/chest.png', chestImgRef);
-    loadImg('/furnace.png', furnaceImgRef);
-    loadImg('/campfire1.png', campfire1ImgRef);
-    loadImg('/campfire2.png', campfire2ImgRef);
-    loadImg('/woodenboard.png', woodenBoardImgRef);
-    loadImg('/antenna.png', antennaImgRef);
-    loadImg('/fence.png', fenceImgRef);
-    loadImg('/ironore.png', ironOreImgRef);
+    assets
+      .load((p) => setAssetProgress(p))
+      .then(() => {
+        bindSprites();
+        setAssetsReady(true);
+      })
+      .catch((err) => debugError('Failed to load sprite atlases', err));
+
     
     // Load Animal Sprites
-    loadImg('/Rooster_animation_without_shadow.png', chickenImgRef);
-    loadImg('/Calf_animation_without_shadow.png', cowImgRef);
-    loadImg('/Piglet_animation_without_shadow.png', pigImgRef);
-    loadImg('/Sheep_animation_without_shadow.png', sheepImgRef);
-
-    // Load Tool Sprites
-    loadImg('/woodaxe.png', woodAxeImgRef);
-    loadImg('/woodepickaxe.png', woodPickaxeImgRef);
-    loadImg('/woodsword.png', woodSwordImgRef);
-    loadImg('/stoneaxe.png', stoneAxeImgRef);
-    loadImg('/stonepickaxe.png', stonePickaxeImgRef);
-    loadImg('/stonesword.png', stoneSwordImgRef);
-
-    // Load Rock Variety
-    for (let i = 1; i <= 9; i++) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = `/rock${i}.png`;
-      img.onload = () => {
-        rockImgRefs.current[i - 1] = img;
-        // Rocks are 100% solid
-        SpriteColliderGenerator.generateFromImage(img, 'obstacle', CollisionLayer.SOLID, 1.0, 1.0).then(shape => {
-          collidersRef.current.set(`/rock${i}.png`, shape);
-          debug(`Generated collider for /rock${i}.png: ${shape.points.length} points`);
-        }).catch(err => {
-          debugError(`Failed to generate collider for /rock${i}.png:`, err);
-        });
-      };
-    }
 
     const state = stateRef.current;
     
@@ -311,7 +248,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     state.camera.y = -state.height / 2;
     
     const getResourceDimensions = (type: EntityType, scale: number, growthStage?: number, rockIndex?: number) => {
-      let img: HTMLImageElement | null = null;
+      let img: Sprite | null = null;
       if (type === 'sapling') img = saplingImgRef.current;
       else if (type === 'bush') img = bushImgRef.current;
       else if (type === 'trunk') img = trunkImgRef.current;
@@ -337,14 +274,14 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         // No image for grass yet, will draw manually or use a placeholder
       }
 
-      if (img && img.complete && img.naturalWidth > 0) {
+      if (img && img) {
         let finalScale = GLOBAL_ASSET_SCALE * scale;
         if (type === 'torch' || type === 'workbench' || type === 'campfire' || type === 'sapling' || type === 'branch' || type === 'small_rock' || type === 'chest' || type === 'furnace') {
           finalScale = 0.4 * scale; // Adjusted for better matching with 128px player
         }
         return {
-          w: img.naturalWidth * finalScale,
-          h: img.naturalHeight * finalScale
+          w: img.width * finalScale,
+          h: img.height * finalScale
         };
       }
 
@@ -612,130 +549,12 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     };
 
     const renderChunkTerrain = (cx: number, cy: number) => {
-      const grassImg = grassTilesRef.current;
-      const dirtImg = dirtTilesRef.current;
-      
-      if (!grassImg || !grassImg.complete || grassImg.naturalWidth === 0) return null;
-      if (!dirtImg || !dirtImg.complete || dirtImg.naturalWidth === 0) return null;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = CHUNK_SIZE;
-      canvas.height = CHUNK_SIZE;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-
-      const chunkX = cx * CHUNK_SIZE;
-      const chunkY = cy * CHUNK_SIZE;
-
-      const grassPattern = ctx.createPattern(grassImg, 'repeat');
-      if (!grassPattern) return null;
-
-      // 1. Draw Grass Base (Seamless World-Space Alignment)
-      const gScale = 0.6;
-      const gMatrix = new DOMMatrix()
-        .translate(-chunkX, -chunkY)
-        .scale(gScale, gScale)
-        .rotate(15);
-      grassPattern.setTransform(gMatrix);
-      ctx.fillStyle = grassPattern;
-      ctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
-
-      // 2. Create Dirt Mask on a temporary canvas (Low-res for smooth scaling)
-      const maskCanvas = document.createElement('canvas');
-      const maskRes = CHUNK_SIZE / 16; // 64x64 for a 1024x1024 chunk
-      maskCanvas.width = maskRes;
-      maskCanvas.height = maskRes;
-      const mctx = maskCanvas.getContext('2d');
-      if (!mctx) return null;
-
-      const imageData = mctx.createImageData(maskRes, maskRes);
-      const data = imageData.data;
-
-      // Blighted Ground Logic
-      const blightedVal = fbm(cx * CHUNK_SIZE * 0.001, cy * CHUNK_SIZE * 0.001, 2);
-      const isBlighted = blightedVal > 0.6;
-
-      for (let y = 0; y < maskRes; y++) {
-        for (let x = 0; x < maskRes; x++) {
-          const worldX = chunkX + x * 16;
-          const worldY = chunkY + y * 16;
-          // Use multiple octaves and larger scale for the mask
-          const noise = fbm(worldX * 0.0005, worldY * 0.0005, 4);
-          
-          let alpha = 0;
-          // Lower threshold to 0.35 to make dirt more common
-          if (noise > 0.35) {
-            alpha = Math.floor(Math.min(1, (noise - 0.35) / 0.1) * 255);
-          }
-          
-          const idx = (y * maskRes + x) * 4;
-          data[idx] = 255;     // R
-          data[idx + 1] = 255; // G
-          data[idx + 2] = 255; // B
-          data[idx + 3] = alpha; // A
-        }
-      }
-      mctx.putImageData(imageData, 0, 0);
-
-      // 3. Draw Dirt using Dual-Texture Blending and the Mask
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = CHUNK_SIZE;
-      tempCanvas.height = CHUNK_SIZE;
-      const tctx = tempCanvas.getContext('2d');
-      if (tctx) {
-        const tDirtPattern = tctx.createPattern(dirtImg, 'repeat');
-        if (tDirtPattern) {
-          // Layer 1: Large Scale Dirt
-          const dScale1 = 0.8;
-          const dMatrix1 = new DOMMatrix()
-            .translate(-chunkX, -chunkY)
-            .scale(dScale1, dScale1)
-            .rotate(-20);
-          tDirtPattern.setTransform(dMatrix1);
-          tctx.fillStyle = tDirtPattern;
-          tctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
-
-          // Layer 2: Medium Scale Dirt (Blended to break repetition)
-          const dScale2 = 0.5;
-          const dMatrix2 = new DOMMatrix()
-            .translate(-chunkX + 500, -chunkY + 500) // Offset to break alignment
-            .scale(dScale2, dScale2)
-            .rotate(45);
-          tDirtPattern.setTransform(dMatrix2);
-          tctx.globalAlpha = 0.4;
-          tctx.fillStyle = tDirtPattern;
-          tctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
-          tctx.globalAlpha = 1.0;
-        }
-        
-        // Apply the mask
-        tctx.globalCompositeOperation = 'destination-in';
-        tctx.imageSmoothingEnabled = true;
-        tctx.drawImage(maskCanvas, 0, 0, maskRes, maskRes, 0, 0, CHUNK_SIZE, CHUNK_SIZE);
-        
-        // Draw the masked dirt onto the main canvas
-        ctx.drawImage(tempCanvas, 0, 0);
-      }
-
-      // 4. Apply Blighted Overlay
-      if (isBlighted) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.fillStyle = 'rgba(20, 10, 30, 0.6)'; // Dark purple/black tint
-        ctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
-        
-        // Add some "static" noise to blighted ground
-        ctx.globalCompositeOperation = 'overlay';
-        ctx.globalAlpha = 0.1;
-        for (let i = 0; i < 100; i++) {
-          ctx.fillStyle = Math.random() > 0.5 ? '#fff' : '#000';
-          ctx.fillRect(Math.random() * CHUNK_SIZE, Math.random() * CHUNK_SIZE, 2, 2);
-        }
-        ctx.restore();
-      }
-
-      const chunkId = `${cx},${cy}`;
-      chunkCanvasesRef.current.set(chunkId, canvas);
+      const canvas = drawChunkTerrain(cx, cy, {
+        grass: grassTilesRef.current,
+        grassVariant: grassVariantTilesRef.current,
+        dirt: dirtTilesRef.current,
+      });
+      if (canvas) chunkCanvasesRef.current.set(`${cx},${cy}`, canvas);
       return canvas;
     };
 
@@ -786,7 +605,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
     // sites below stay as they were.
     const addToInventory = (type: ItemType, count: number) => invAdd(state, type, count);
     const removeFromInventory = (type: ItemType, count: number) => invRemove(state, type, count);
-    const hasIngredients = (ingredients: Ingredient[]) => invHas(state, ingredients);
 
     const _craftItem = (recipeId: string) => {
       const result = craft(state, recipeId);
@@ -1360,6 +1178,9 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
             } else if (res.type === 'coal_ore') {
               dropType = 'coal';
               dropCount = 1 + Math.floor(Math.random() * 3);
+            } else if (res.type === 'iron_ore') {
+              dropType = 'iron_ore';
+              dropCount = 1 + Math.floor(Math.random() * 2);
             } else if (res.type === 'sapling') {
               dropType = 'sapling';
               dropCount = 1;
@@ -1623,18 +1444,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
                 const dims = getResourceDimensions(res.type, res.scale, res.growthStage, res.rockIndex);
                 
                   // Use generated collider if available
-                  let imgUrl = '';
-                  const typeStr = res.type as string;
-                  if (typeStr === 'tree') imgUrl = res.growthStage === 1 ? '/small_tree.png' : '/tree.png';
-                  else if (typeStr === 'rock' || typeStr === 'coal_ore') imgUrl = `/rock${(res.rockIndex ?? 0) + 1}.png`;
-                  else if (typeStr === 'trunk') imgUrl = '/trunk.png';
-                  else if (typeStr === 'sapling') imgUrl = '/sapling.png';
-                  else if (typeStr === 'bush') imgUrl = '/bush.png';
-                  else if (typeStr === 'torch') imgUrl = '/torch.png';
-                  else if (typeStr === 'workbench') imgUrl = '/workbench.png';
-                  else if (typeStr === 'campfire') imgUrl = '/campfire1.png';
-                  else if (typeStr === 'chest') imgUrl = '/chest.png';
-                  else if (typeStr === 'furnace') imgUrl = '/furnace.png';
+                  let imgUrl = idForEntity(res.type as string, { growthStage: res.growthStage, rockIndex: res.rockIndex });
                   
                   const shape = collidersRef.current.get(imgUrl);
                   if (shape && shape.layer === CollisionLayer.SOLID) {
@@ -2075,8 +1885,8 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       ctx.save();
       ctx.translate(x, y);
 
-      const drawImageFit = (img: HTMLImageElement | null, scale = 1) => {
-        if (!img || !img.complete) return false;
+      const drawImageFit = (img: Sprite | null, scale = 1) => {
+        if (!img || !img) return false;
         const aspect = img.width / img.height;
         let dw = size * scale;
         let dh = size * scale;
@@ -2617,17 +2427,19 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
 
     const getAnimalSpriteInfo = (type: AnimalType) => {
-      let img: HTMLImageElement | null = null;
+      let img: Sprite | null = null;
       let w = 100, h = 100; // Default sizes
       let imgUrl = '';
       
-      if (type === 'cow') { img = cowImgRef.current; imgUrl = '/Calf_animation_without_shadow.png'; w = 150; h = 150; }
-      else if (type === 'pig') { img = pigImgRef.current; imgUrl = '/Piglet_animation_without_shadow.png'; w = 120; h = 120; }
-      else if (type === 'sheep') { img = sheepImgRef.current; imgUrl = '/Sheep_animation_without_shadow.png'; w = 100; h = 100; }
-      else if (type === 'chicken') { img = chickenImgRef.current; imgUrl = '/Rooster_animation_without_shadow.png'; w = 80; h = 80; }
+      if (type === 'cow') { img = cowImgRef.current; imgUrl = 'characters/cow'; w = 150; h = 150; }
+      else if (type === 'pig') { img = pigImgRef.current; imgUrl = 'characters/pig'; w = 120; h = 120; }
+      else if (type === 'sheep') { img = sheepImgRef.current; imgUrl = 'characters/sheep'; w = 100; h = 100; }
+      else if (type === 'chicken') { img = chickenImgRef.current; imgUrl = 'characters/chicken'; w = 80; h = 80; }
       
-      let rows = 8;
-      let cols = 6;
+      // Grid comes from the manifest, not from a hardcoded guess.
+      const sheet = (FRAMES as Record<string, { grid?: { cols: number; rows: number } }>)[imgUrl];
+      const rows = sheet?.grid?.rows ?? 4;
+      const cols = sheet?.grid?.cols ?? 3;
       const hasLabelCol = false;
       const hasLabelRow = false;
       const labelHeight = 0;
@@ -2641,9 +2453,9 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
       
       const { img, w, h, rows, cols, hasLabelCol: _hasLabelCol, hasLabelRow: _hasLabelRow, labelHeight } = getAnimalSpriteInfo(animal.type);
       
-      if (img && img.complete && img.naturalWidth > 0) {
-        const sw = img.naturalWidth / cols;
-        const sh = img.naturalHeight / rows;
+      if (img && img) {
+        const sw = img.width / cols;
+        const sh = img.height / rows;
 
         // The animal spritesheets are 6x8 grids containing 4 different 3x4 characters.
         // We will just use the top-left character (columns 0-2, rows 0-3).
@@ -2663,29 +2475,12 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           frameX = Math.floor(animal.animFrame % animCols);
         }
 
-        let frameY = 0;
-
-        // The spritesheet has 8 rows:
-        // 0: Walking Down
-        // 1: Walking Up
-        // 2: Walking Left
-        // 3: Walking Right
-        // 4: Standing Down
-        // 5: Standing Up
-        // 6: Standing Left
-        // 7: Standing Right
-
-        if (animal.isMoving) {
-          if (animal.facing === 'down') frameY = 0;
-          else if (animal.facing === 'up') frameY = 1;
-          else if (animal.facing === 'left') frameY = 2;
-          else if (animal.facing === 'right') frameY = 3;
-        } else {
-          if (animal.facing === 'down') frameY = 4;
-          else if (animal.facing === 'up') frameY = 5;
-          else if (animal.facing === 'left') frameY = 6;
-          else if (animal.facing === 'right') frameY = 7;
-        }
+        // Sheets are four rows, one per facing direction: down, left, right, up.
+        // Standing reuses the same row and simply holds the first frame, rather
+        // than the separate stand rows the old eight-row sheets had.
+        const ROW_FOR_FACING = { down: 0, left: 1, right: 2, up: 3 } as const;
+        const frameY = ROW_FOR_FACING[animal.facing ?? 'down'];
+        if (!animal.isMoving) frameX = 0;
 
         // Selection highlight
         if (stateRef.current.selectedAnimalId === animal.id) {
@@ -3056,7 +2851,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           ctx.globalAlpha = e.opacity ?? 1;
           const dims = getResourceDimensions(e.type, e.scale, e.growthStage);
           
-          let img: HTMLImageElement | null = null;
+          let img: Sprite | null = null;
           if (e.type === 'sapling') img = saplingImgRef.current;
           else if (e.type === 'bush') img = bushImgRef.current;
           else if (e.type === 'trunk') img = trunkImgRef.current;
@@ -3070,7 +2865,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           else if (e.type === 'antenna') img = antennaImgRef.current;
           else if (e.type === 'fence') img = fenceImgRef.current;
 
-          if (img && img.complete && img.naturalWidth > 0) {
+          if (img && img) {
             ctx.save();
             
             // Draw highlight if targeted
@@ -3205,15 +3000,16 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           ctx.globalAlpha = e.opacity ?? 1;
           const dims = getResourceDimensions(e.type, e.scale, undefined, e.rockIndex);
           
-          let img: HTMLImageElement | null = null;
+          let img: Sprite | null = null;
           let imgUrl = '';
-          if (ent.type === 'coal_ore') { img = coalOreImgRef.current; imgUrl = '/coalore.png'; }
-          else if (ent.type === 'iron_ore') { img = ironOreImgRef.current; imgUrl = '/ironore.png'; }
-          else if (ent.type === 'branch') { img = stickImgRef.current; imgUrl = '/stick.png'; }
-          else if (ent.type === 'small_rock') { img = stoneItemImgRef.current; imgUrl = '/stoneitem.png'; }
-          else { img = rockImgRefs.current[e.rockIndex ?? 0]; imgUrl = `/rock${(e.rockIndex ?? 0) + 1}.png`; }
+          imgUrl = idForEntity(ent.type as string, { rockIndex: e.rockIndex });
+          if (ent.type === 'coal_ore') img = coalOreImgRef.current;
+          else if (ent.type === 'iron_ore') img = ironOreImgRef.current;
+          else if (ent.type === 'branch') img = stickImgRef.current;
+          else if (ent.type === 'small_rock') img = stoneItemImgRef.current;
+          else img = rockImgRefs.current[e.rockIndex ?? 0];
           
-          if (img && img.complete && img.naturalWidth > 0) {
+          if (img && img) {
             // Draw highlight if targeted
             if (e.isTargeted) {
               ctx.save();
@@ -3331,7 +3127,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
           if (e.type === 'branch') {
             const img = stickImgRef.current;
-            if (img && img.complete) {
+            if (img && img) {
               ctx.drawImage(img, Math.round(e.x), Math.round(e.y), dims.w, dims.h);
             } else {
               ctx.strokeStyle = '#8b4513';
@@ -3343,7 +3139,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
             }
           } else if (e.type === 'small_rock') {
             const img = stoneItemImgRef.current;
-            if (img && img.complete) {
+            if (img && img) {
               ctx.drawImage(img, Math.round(e.x), Math.round(e.y), dims.w, dims.h);
             } else {
               ctx.fillStyle = ROCK_COLOR;
@@ -3371,27 +3167,15 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           ctx.globalAlpha = 1;
         } else if (ent.type === 'player') {
           const p = ent as GameState['player'];
-          if (spriteRef.current && spriteRef.current.complete && spriteRef.current.naturalWidth !== 0) {
-            const frameX = Math.floor(p.animFrame);
-            let finalFrameX = frameX;
-            let frameY = 0; // Down
-            
-            if (p.facing === 'up') {
-              frameY = 1;
-              finalFrameX = frameX % 6;
-            } else if (p.facing === 'down') {
-              frameY = 0;
-              finalFrameX = frameX % 6;
-            } else if (p.facing === 'right') {
-              frameY = 2;
-              finalFrameX = (frameX % 3) + 3; // Last 3 frames are Right
-            } else if (p.facing === 'left') {
-              frameY = 2;
-              finalFrameX = frameX % 3; // First 3 frames are Left
-            }
+          if (spriteRef.current && spriteRef.current) {
+            // Rows are authored as down, left, right, up.
+            const grid = PLAYER_FRAME.grid ?? { cols: 8, rows: 4, cellW: 64, cellH: 96 };
+            const ROW_FOR_FACING = { down: 0, left: 1, right: 2, up: 3 } as const;
+            const frameY = ROW_FOR_FACING[p.facing ?? 'down'];
+            const finalFrameX = Math.floor(p.animFrame) % grid.cols;
 
-            const spriteWidth = spriteRef.current.width / 6;
-            const spriteHeight = spriteRef.current.height / 3;
+            const spriteWidth = spriteRef.current.width / grid.cols;
+            const spriteHeight = spriteRef.current.height / grid.rows;
 
             ctx.save();
             ctx.drawImage(
@@ -3672,20 +3456,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
                       // Check if within bounding box first
                       if (worldX >= res.x && worldX <= res.x + dims.w && worldY >= res.y && worldY <= res.y + dims.h) {
                         // Use sprite collider for precision if available
-                        let imgUrl = '';
-                        const typeStr = res.type as string;
-                        if (typeStr === 'tree') imgUrl = res.growthStage === 1 ? '/small_tree.png' : '/tree.png';
-                        else if (typeStr === 'rock' || typeStr === 'coal_ore') imgUrl = `/rock${(res.rockIndex ?? 0) + 1}.png`;
-                        else if (typeStr === 'trunk') imgUrl = '/trunk.png';
-                        else if (typeStr === 'sapling') imgUrl = '/sapling.png';
-                        else if (typeStr === 'bush') imgUrl = '/bush.png';
-                        else if (typeStr === 'torch') imgUrl = '/torch.png';
-                        else if (typeStr === 'workbench') imgUrl = '/workbench.png';
-                        else if (typeStr === 'campfire') imgUrl = '/campfire1.png';
-                        else if (typeStr === 'chest') imgUrl = '/chest.png';
-                        else if (typeStr === 'furnace') imgUrl = '/furnace.png';
-                        else if (typeStr === 'branch') imgUrl = '/stick.png';
-                        else if (typeStr === 'small_rock') imgUrl = '/stoneitem.png';
+                        let imgUrl = idForEntity(res.type as string, { growthStage: res.growthStage, rockIndex: res.rockIndex });
 
                         const shape = collidersRef.current.get(imgUrl);
                         if (shape) {
@@ -3918,6 +3689,10 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
   return (
     <div className="fixed inset-0 bg-neutral-900 overflow-hidden">
+      {!assetsReady && (
+        <LoadingScreen loaded={assetProgress.loaded} total={assetProgress.total} />
+      )}
+
       <canvas
         ref={canvasRef}
         width={dimensions.width}
@@ -4053,23 +3828,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         )}
       </div>
 
-      {/* Batch Processing Explanation (Hidden) */}
-      {/* 
-        BATCH PROCESSING SYSTEM:
-        To run this on a folder of assets:
-        1. Use the `SpriteColliderGenerator.batchProcess(assets)` method.
-        2. Pass an array of asset metadata:
-           const assets = [
-             { url: '/tree.png', type: 'obstacle', layer: CollisionLayer.SOLID },
-             { url: '/stick.png', type: 'interactable', layer: CollisionLayer.ITEM },
-             ...
-           ];
-        3. The system will iterate through all images, trace their alpha channels,
-           simplify the polygons using RDP, and return a Map of optimized shapes.
-        4. This can be run at build-time to generate a JSON manifest, or at runtime
-           during the loading screen.
-      */}
-
       {/* Inventory Overlay */}
       <AnimatePresence>
         {stateRef.current.isInventoryOpen && (
@@ -4095,285 +3853,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
 // --- UI Components ---
 
-const ITEM_IMAGES: Record<string, string> = {
-  wood: '/wooditem.png',
-  stone: '/stoneitem.png',
-  sapling: '/sapling.png',
-  coal: '/coal.png',
-  stick: '/stick.png',
-  workbench: '/workbench.png',
-  campfire: '/campfire1.png',
-  torch: '/torch.png',
-  wheat_seeds: '/sapling.png',
-  wooden_axe: '/woodaxe.png',
-  wooden_pickaxe: '/woodepickaxe.png',
-  stone_axe: '/stoneaxe.png',
-  stone_pickaxe: '/stonepickaxe.png',
-  wooden_sword: '/woodsword.png',
-  stone_sword: '/stonesword.png',
-  raw_beef: '/raw_beef.png',
-  leather: '/leather.png',
-  raw_pork: '/raw_pork.png',
-  mutton: '/mutton.png',
-  wool: '/wool.png',
-  raw_chicken: '/raw_chicken.png',
-  feather: '/feather.png',
-  egg: '/egg.png',
-  bed: '/bed.png',
-  leather_cap: '/leather_cap.png',
-  leather_tunic: '/leather_tunic.png',
-  leather_pants: '/leather_pants.png',
-  leather_boots: '/leather_boots.png',
-  leather_backpack: '/leather_backpack.png',
-  chest: '/chest.png',
-  furnace: '/furnace.png',
-  cooked_beef: '/cooked_beef.png',
-  cooked_pork: '/cooked_pork.png',
-  cooked_mutton: '/cooked_mutton.png',
-  cooked_chicken: '/cooked_chicken.png',
-  scrap_metal: '/scrap_metal.png',
-  copper_wiring: '/copper_wiring.png',
-  iron_ingot: '/iron_ingot.png',
-  iron_axe: '/iron_axe.png',
-  iron_pickaxe: '/iron_pickaxe.png',
-  iron_sword: '/iron_sword.png',
-  antenna: '/antenna.png',
-  fence: '/fence.png',
-  bread: '/bread.png',
-  meat_pie: '/meat_pie.png',
-  omelet: '/omelet.png',
-  wheat: '/wheat.png',
-};
-
-const PlaceholderIcon = ({ type, size }: { type: string, size: number }) => {
-  const getIcon = () => {
-    switch (type) {
-      case 'wood': return <rect width="80" height="40" x="10" y="30" fill="#3e2723" stroke="black" strokeWidth="4" />;
-      case 'stone': return <circle cx="50" cy="50" r="40" fill="#5a5a5a" stroke="black" strokeWidth="4" />;
-      case 'sapling': return (
-        <g>
-          <rect width="14" height="70" x="43" y="20" fill="#8b4513" />
-          <circle cx="50" cy="25" r="35" fill="#4caf50" />
-          <circle cx="20" cy="55" r="30" fill="#4caf50" />
-          <circle cx="80" cy="55" r="30" fill="#4caf50" />
-        </g>
-      );
-      case 'wheat_seeds': return (
-        <g fill="#f4a460" stroke="#d2b48c" strokeWidth="2">
-          <ellipse cx="30" cy="50" rx="18" ry="25" transform="rotate(45, 30, 50)" />
-          <ellipse cx="50" cy="50" rx="18" ry="25" transform="rotate(45, 50, 50)" />
-          <ellipse cx="70" cy="50" rx="18" ry="25" transform="rotate(45, 70, 50)" />
-        </g>
-      );
-      case 'coal': return <circle cx="50" cy="50" r="30" fill="#1a1a1a" stroke="#333" strokeWidth="4" />;
-      case 'stick': return <line x1="20" y1="80" x2="80" y2="20" stroke="#8b4513" strokeWidth="8" />;
-      case 'workbench': return (
-        <g>
-          <rect width="80" height="60" x="10" y="20" fill="#8b4513" stroke="black" strokeWidth="4" />
-          <rect width="60" height="10" x="20" y="30" fill="#d2b48c" />
-        </g>
-      );
-      case 'furnace': return (
-        <g>
-          <rect width="80" height="80" x="10" y="10" fill="gray" stroke="black" strokeWidth="4" />
-          <rect width="40" height="30" x="30" y="50" fill="black" />
-        </g>
-      );
-      case 'chest': return (
-        <g>
-          <rect width="80" height="60" x="10" y="20" fill="#8b4513" stroke="black" strokeWidth="4" />
-          <rect width="10" height="10" x="45" y="45" fill="gold" />
-        </g>
-      );
-      case 'torch': return (
-        <g>
-          <line x1="50" y1="80" x2="50" y2="30" stroke="#8b4513" strokeWidth="8" />
-          <circle cx="50" cy="20" r="15" fill="#ff4500" />
-        </g>
-      );
-      case 'campfire': return (
-        <g>
-          <rect width="60" height="20" x="20" y="60" fill="#8b4513" />
-          <path d="M 30 60 L 50 20 L 70 60 Z" fill="#ff4500" />
-        </g>
-      );
-      case 'bed': return (
-        <g>
-          <rect width="80" height="40" x="10" y="30" fill="#5d4037" />
-          <rect width="55" height="30" x="30" y="35" fill="#e57373" />
-          <rect width="20" height="30" x="10" y="35" fill="#f5f5f5" />
-        </g>
-      );
-      case 'wooden_axe':
-      case 'stone_axe':
-      {
-        const axeColor = type.startsWith('wooden') ? '#a0522d' : '#999';
-        const handleColor = type.startsWith('wooden') ? '#8b4513' : '#777';
-        return (
-          <g>
-            <line x1="30" y1="80" x2="70" y2="20" stroke={handleColor} strokeWidth="8" />
-            <path d="M 50 20 L 80 10 L 90 40 L 60 50 Z" fill={axeColor} stroke="black" strokeWidth="2" />
-          </g>
-        );
-      }
-      case 'wooden_pickaxe':
-      case 'stone_pickaxe':
-      {
-        const pickColor = type.startsWith('wooden') ? '#a0522d' : '#999';
-        const pickHandleColor = type.startsWith('wooden') ? '#8b4513' : '#777';
-        return (
-          <g>
-            <line x1="50" y1="90" x2="50" y2="30" stroke={pickHandleColor} strokeWidth="8" />
-            <path d="M 10 40 Q 50 20 90 40 L 90 50 Q 50 30 10 50 Z" fill={pickColor} stroke="black" strokeWidth="2" />
-          </g>
-        );
-      }
-      case 'wooden_sword':
-      case 'stone_sword':
-      {
-        const swordColor = type.startsWith('wooden') ? '#a0522d' : '#999';
-        const swordHandleColor = type.startsWith('wooden') ? '#8b4513' : '#777';
-        return (
-          <g>
-            <line x1="20" y1="80" x2="50" y2="50" stroke={swordHandleColor} strokeWidth="8" />
-            <path d="M 40 60 L 80 20 L 90 10 L 70 30 Z" fill={swordColor} stroke="black" strokeWidth="2" />
-          </g>
-        );
-      }
-      case 'leather_cap': return <path d="M 20 70 A 30 30 0 0 1 80 70 Z" fill="#8d6e63" stroke="#5d4037" strokeWidth="4" />;
-      case 'leather_tunic': return <rect width="60" height="60" x="20" y="20" fill="#8d6e63" stroke="#5d4037" strokeWidth="4" />;
-      case 'leather_pants': return (
-        <g fill="#8d6e63" stroke="#5d4037" strokeWidth="4">
-          <rect width="40" height="30" x="30" y="20" />
-          <rect width="15" height="40" x="30" y="50" />
-          <rect width="15" height="40" x="55" y="50" />
-        </g>
-      );
-      case 'leather_boots': return (
-        <g fill="#8d6e63" stroke="#5d4037" strokeWidth="4">
-          <rect width="25" height="40" x="20" y="50" />
-          <rect width="25" height="40" x="55" y="50" />
-        </g>
-      );
-      case 'leather_backpack': return (
-        <g>
-          <rect width="60" height="70" x="20" y="20" fill="#8d6e63" stroke="black" strokeWidth="4" />
-          <rect width="40" height="40" x="30" y="30" fill="#5d4037" />
-        </g>
-      );
-      case 'raw_beef': return <ellipse cx="50" cy="50" rx="30" ry="20" fill="#b71c1c" stroke="#7f0000" strokeWidth="4" />;
-      case 'cooked_beef': return <ellipse cx="50" cy="50" rx="30" ry="20" fill="#5d4037" stroke="#3e2723" strokeWidth="4" />;
-      case 'raw_pork': return <ellipse cx="50" cy="50" rx="30" ry="20" fill="#f48fb1" stroke="#c2185b" strokeWidth="4" />;
-      case 'cooked_pork': return <ellipse cx="50" cy="50" rx="30" ry="20" fill="#8d6e63" stroke="#5d4037" strokeWidth="4" />;
-      case 'mutton': return <ellipse cx="50" cy="50" rx="25" ry="25" fill="#e57373" stroke="#b71c1c" strokeWidth="4" />;
-      case 'cooked_mutton': return <ellipse cx="50" cy="50" rx="25" ry="25" fill="#5d4037" stroke="#3e2723" strokeWidth="4" />;
-      case 'raw_chicken': return <ellipse cx="60" cy="50" rx="20" ry="30" fill="#ffe0b2" stroke="#f57c00" strokeWidth="4" transform="rotate(45, 60, 50)" />;
-      case 'cooked_chicken': return <ellipse cx="60" cy="50" rx="20" ry="30" fill="#d7ccc8" stroke="#8d6e63" strokeWidth="4" transform="rotate(45, 60, 50)" />;
-      case 'wool': return (
-        <g fill="#ffffff" stroke="#e0e0e0" strokeWidth="2">
-          <circle cx="40" cy="40" r="20" />
-          <circle cx="60" cy="40" r="20" />
-          <circle cx="50" cy="60" r="20" />
-        </g>
-      );
-      case 'leather': return <path d="M 30 20 L 70 20 L 80 80 L 20 80 Z" fill="#8d6e63" stroke="#5d4037" strokeWidth="4" />;
-      case 'feather': return (
-        <g stroke="#9e9e9e" strokeWidth="2">
-          <ellipse cx="50" cy="50" rx="10" ry="30" fill="#ffffff" transform="rotate(45, 50, 50)" />
-          <line x1="30" y1="70" x2="70" y2="30" />
-        </g>
-      );
-      case 'egg': return <ellipse cx="50" cy="50" rx="20" ry="25" fill="#fff9c4" stroke="#fbc02d" strokeWidth="4" />;
-      case 'scrap_metal': return <rect width="60" height="40" x="20" y="30" fill="#78909c" stroke="#455a64" strokeWidth="4" />;
-      case 'copper_wiring': return <path d="M 20 50 Q 50 20 80 50 T 20 50" fill="none" stroke="#d84315" strokeWidth="6" />;
-      case 'iron_ingot': return <rect width="70" height="30" x="15" y="35" fill="#cfd8dc" stroke="#90a4ae" strokeWidth="4" />;
-      case 'iron_axe': return (
-        <g>
-          <line x1="30" y1="80" x2="70" y2="20" stroke="#8b4513" strokeWidth="8" />
-          <path d="M 50 20 L 80 10 L 90 40 L 60 50 Z" fill="#cfd8dc" stroke="black" strokeWidth="2" />
-        </g>
-      );
-      case 'iron_pickaxe': return (
-        <g>
-          <line x1="50" y1="90" x2="50" y2="30" stroke="#8b4513" strokeWidth="8" />
-          <path d="M 10 40 Q 50 20 90 40 L 90 50 Q 50 30 10 50 Z" fill="#cfd8dc" stroke="black" strokeWidth="2" />
-        </g>
-      );
-      case 'iron_sword': return (
-        <g>
-          <line x1="20" y1="80" x2="50" y2="50" stroke="#8b4513" strokeWidth="8" />
-          <path d="M 40 60 L 80 20 L 90 10 L 70 30 Z" fill="#cfd8dc" stroke="black" strokeWidth="2" />
-        </g>
-      );
-      case 'antenna': return (
-        <g>
-          <rect width="10" height="80" x="45" y="10" fill="#90a4ae" />
-          <circle cx="50" cy="20" r="10" fill="#d84315" />
-          <line x1="30" y1="40" x2="70" y2="40" stroke="#90a4ae" strokeWidth="4" />
-          <line x1="35" y1="60" x2="65" y2="60" stroke="#90a4ae" strokeWidth="4" />
-        </g>
-      );
-      case 'fence': return (
-        <g fill="#8b4513" stroke="black" strokeWidth="2">
-          <rect width="10" height="80" x="20" y="10" />
-          <rect width="10" height="80" x="70" y="10" />
-          <rect width="60" height="10" x="20" y="30" />
-          <rect width="60" height="10" x="20" y="60" />
-        </g>
-      );
-      case 'bread': return <ellipse cx="50" cy="50" rx="40" ry="25" fill="#ffcc80" stroke="#ef6c00" strokeWidth="4" />;
-      case 'meat_pie': return (
-        <g>
-          <ellipse cx="50" cy="55" rx="40" ry="20" fill="#d2b48c" stroke="#8b4513" strokeWidth="4" />
-          <path d="M 20 50 Q 50 20 80 50" fill="#8b4513" />
-        </g>
-      );
-      case 'omelet': return (
-        <g>
-          <circle cx="50" cy="50" r="40" fill="#fff9c4" stroke="#fbc02d" strokeWidth="4" />
-          <circle cx="50" cy="50" r="15" fill="#fbc02d" />
-        </g>
-      );
-      case 'wheat': return <path d="M 50 80 L 50 20 M 50 40 L 30 30 M 50 40 L 70 30 M 50 60 L 30 50 M 50 60 L 70 50" stroke="#fbc02d" strokeWidth="4" />;
-      default: return <circle cx="50" cy="50" r="40" fill="#ccc" stroke="#999" strokeWidth="4" />;
-    }
-  };
-
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" className="pixelated pointer-events-none">
-      {getIcon()}
-    </svg>
-  );
-};
-
-const ItemIcon = ({ type, size }: { type: string, size: number }) => {
-  const [error, setError] = useState(false);
-  const src = ITEM_IMAGES[type];
-
-  if (error || !src) {
-    return <PlaceholderIcon type={type} size={size} />;
-  }
-
-  const isSmallItem = type === 'sapling' || type === 'wheat_seeds';
-  const scale = isSmallItem ? 2.5 : 1;
-
-  return (
-    <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
-      <img
-        src={src}
-        alt={type}
-        onError={() => setError(true)}
-        className="pixelated pointer-events-none"
-        style={{
-          width: size * scale,
-          height: size * scale,
-          objectFit: 'contain',
-          imageRendering: 'pixelated'
-        }}
-      />
-    </div>
-  );
-};
 
 const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, refreshUI: () => void, onClose: () => void }) => {
   const [draggedItem, setDraggedItem] = useState<{ index: number, from: 'inventory' | 'equipment' | 'chest' | 'furnace', slot?: string } | null>(null);
@@ -4509,7 +3988,16 @@ const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, ref
             <div className="relative w-full h-64 flex items-center justify-center">
                {/* Paper Doll */}
                <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
-                  <img src="/farmer_spritesheet.png" className="w-32 h-32 pixelated object-none" style={{ objectPosition: '0 0' }} />
+                  {/* Paper doll: the player sheet's first cell, taken from the atlas. */}
+                  <div
+                    className="w-32 h-32 pixelated"
+                    style={{
+                      backgroundImage: `url(/sprites/${PLAYER_FRAME.atlas}.png)`,
+                      backgroundPosition: `-${PLAYER_FRAME.x}px -${PLAYER_FRAME.y}px`,
+                      backgroundRepeat: 'no-repeat',
+                      imageRendering: 'pixelated',
+                    }}
+                  />
                </div>
                
                {/* Slots around player */}

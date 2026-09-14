@@ -93,7 +93,7 @@ export const HIGHLIGHT = '${hex(byVal[byVal.length - 1])}';
 
 /** Nearest palette entry to an arbitrary colour. */
 export function quantise(r: number, g: number, b: number): string {
-  let best = PALETTE[0];
+  let best: string = PALETTE[0];
   let bd = Infinity;
   for (const p of PALETTE) {
     const pr = parseInt(p.slice(1, 3), 16);
