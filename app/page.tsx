@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Game from '../components/Game';
 import MainMenu from '../components/MainMenu';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export default function Page() {
   const [gameState, setGameState] = useState<'menu' | 'playing'>('menu');
@@ -23,7 +24,10 @@ export default function Page() {
       {gameState === 'menu' ? (
         <MainMenu onStartGame={handleStartGame} onLoadGame={handleLoadGame} />
       ) : (
-        <Game onExitToMenu={() => setGameState('menu')} loadedSaveId={loadedSaveId} />
+        // A crash in the engine should not leave a white screen with no way back.
+        <ErrorBoundary onReset={() => setGameState('menu')}>
+          <Game onExitToMenu={() => setGameState('menu')} loadedSaveId={loadedSaveId} />
+        </ErrorBoundary>
       )}
     </main>
   );

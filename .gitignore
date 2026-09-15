@@ -8,3 +8,6 @@ coverage/
 
 # Raw generated art (only packed atlases are committed)
 assets-src/
+
+# Static export output
+out/

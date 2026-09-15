@@ -14,7 +14,8 @@
     "audit:assets": "node scripts/audit-assets.mjs",
     "assets:generate": "node scripts/generate-all.mjs",
     "assets:process": "node scripts/process-asset.mjs",
-    "assets:pack": "node scripts/pack-atlases.mjs"
+    "assets:pack": "node scripts/pack-atlases.mjs",
+    "build:static": "STATIC_EXPORT=1 next build"
   },
   "dependencies": {
     "autoprefixer": "^10.4.21",
