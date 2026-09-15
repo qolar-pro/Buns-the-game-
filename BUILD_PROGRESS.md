@@ -8,14 +8,14 @@ Living log for the 10-phase overhaul. Updated at the end of every phase.
 |---|---|---|
 | 0 | Safety net: audit, checklist, baselines | ✅ Complete |
 | 1 | Repo hygiene | ✅ Complete |
-| 2 | Decompose `Game.tsx` | ⬜ Not started |
-| 3 | Asset system (manifest, registry, authored colliders) | ⬜ Not started |
-| 4 | Regenerate every asset + audio | ⬜ Not started |
-| 5 | Rendering and feel | ⬜ Not started |
-| 6 | One UI system | ⬜ Not started |
-| 7 | Mobile | ⬜ Not started |
-| 8 | Saves and persistence | ⬜ Not started |
-| 9 | Performance and shipping | ⬜ Not started |
+| 2 | Decompose `Game.tsx` | ✅ Complete |
+| 3 | Asset system (manifest, registry, authored colliders) | ✅ Complete |
+| 4 | Regenerate every asset + audio | ✅ Complete |
+| 5 | Rendering and feel | ✅ Complete |
+| 6 | One UI system | ✅ Complete |
+| 7 | Mobile | ✅ Complete |
+| 8 | Saves and persistence | ✅ Complete |
+| 9 | Performance and shipping | ✅ Complete |
 
 ## Baseline (captured at Phase 0, commit `pre-overhaul`)
 
@@ -126,15 +126,136 @@ Raw audit output: `docs/audit-baseline.txt`.
   creation through a minimum-interval gate with exponential backoff on 429, while polling and
   downloads still run concurrently.
 
-## Before / after screenshots
 
-Six baseline views to be captured and compared: main menu, world, inventory, crafting, furnace, night.
+
+- **DD-014: Sprite sheets are composed from directional art, not generated whole.**
+  Diffusion cannot hold a character consistent across the cells of a grid — the first
+  attempt returned a scatter of unrelated figures rather than a walk cycle. One clean
+  sprite per facing direction is generated and `scripts/build-sheets.mjs` composes the
+  frames as deterministic transforms, so every frame is unmistakably the same character.
+
+- **DD-015: UI chrome is CSS, not generated art.**
+  The brief lists panel frames, slots and buttons among the assets to generate. They need
+  exact geometry and 9-slice edges a diffusion model cannot hold, and Phase 6 rebuilds the
+  UI as React DOM where they are borders. Only true icons (heart, drumstick, bolt, cursor)
+  are generated.
+
+- **DD-016: Sprites are quantised to the palette only for canvas-drawn pixels.**
+  Hard 32-colour quantisation of soft-shaded painted art produces visible banding and makes
+  it look worse, not more cohesive. The palette is built from the shipped art and used for
+  particles, outlines, labels and UI — so canvas pixels sit in the same colour space — while
+  the sprites keep their own shading. Cohesion comes from one generator and one style prefix.
+
+- **DD-017: Colliders are authored per asset, with a script that proposes numbers.**
+  As the brief specifies; `scripts/suggest-collider.mjs` reads the alpha channel and prints
+  candidate ellipses for a human to paste into the manifest. Generation never feeds physics.
+
+- **DD-018: Kept the pure-geometry half of SpriteCollider.**
+  The brief says to delete the runtime pixel-reading generator from the hot path, which is
+  done — nothing traces pixels at game time. `isPointInPolygon` is pure geometry the
+  collision code still needs, so it stays.
+
+- **DD-019: A dev-only `window.__buns` handle exposes the running engine.**
+  Tests that assert on outcomes rather than on screenshots need to read game state. Two of
+  the bugs above were invisible precisely because the tests could only compare pixels. The
+  handle is stripped in production.
+
+## Final results
+
+| Metric | Before | After | Target |
+|---|---|---|---|
+| `components/Game.tsx` | 5,119 lines | **240** | ≤ 300 |
+| Largest single `useEffect` | 3,870 lines | gone | — |
+| Files over 500 lines | 1 | **0** | 0 |
+| Referenced PNGs missing | **33 of 61** | **0** | 0 |
+| Unused PNGs | 0 | 0 | 0 |
+| Art payload | 6.75 MB / 37 files | **1.09 MB / 5 atlases** | < 2.5 MB, ≤ 5 |
+| HTTP image requests at load | ~37 | **5** | ≤ 5 |
+| `useRef<HTMLImageElement>` | 34 | **0** | 0 |
+| `: any` / `@ts-ignore` | 8 / 0 | **0 / 0** | 0 |
+| Stray `console.*` | 11 | **0** | 0 |
+| Tests | 0 | **44** | inventory, crafting, smelting, noise |
+| Touch support | none | full layer, verified harvesting | playable |
+| Save schema | unversioned blob | versioned + migration chain, IndexedDB | migrates v0 |
+| `npm run build` | passed with lint skipped | **passes with ESLint + TypeScript enforced** | enforced |
+| Deploy | none | Vercel or static export, both verified | works |
+
+Engine modules under `src/game/`: **38**.
+
+### Automated checks
+
+| Suite | Result | Covers |
+|---|---|---|
+| `npm test` | 44 passing | inventory, crafting, smelting, noise determinism, save migration |
+| `node scripts/smoke-test.mjs` | 12/12 | boot, world render, movement, harvesting yields drops, inventory, crafting, hotbar, pause, save, 404s, page errors |
+| `node scripts/mobile-test.mjs` | 10/10 | touch layer, stick moves the player, action button harvests, sheets, frame time under 4x CPU throttle, portrait gate |
+| `node scripts/audit-assets.mjs` | 0 missing, 0 unused | every PNG reference against `public/` |
+
+The smoke test also runs against the static export (`out/`), where it passes 12/12 —
+so the deploy artefact is verified, not just the dev server.
+
+## Before / after
 
 | View | Before | After |
 |---|---|---|
-| Main menu | `docs/screens/before-menu.png` | _pending_ |
-| World (day) | `docs/screens/before-world.png` | _pending_ |
-| Inventory | `docs/screens/before-inventory.png` | _pending_ |
-| Crafting | `docs/screens/before-crafting.png` | _pending_ |
-| Furnace | `docs/screens/before-furnace.png` | _pending_ |
-| World (night) | `docs/screens/before-night.png` | _pending_ |
+| Main menu | `docs/screens/before-menu.png` | `docs/screens/after-menu.png` |
+| World (day) | `docs/screens/before-world.png` | `docs/screens/after-world.png` |
+| Inventory | `docs/screens/before-inventory.png` | `docs/screens/after-inventory.png` |
+| Crafting | `docs/screens/before-crafting.png` | `docs/screens/after-crafting.png` |
+| Furnace | `docs/screens/before-furnace.png` | `docs/screens/after-furnace.png` |
+| World (night) | `docs/screens/before-night.png` | `docs/screens/after-night.png` |
+| Mobile (landscape) | n/a — unplayable | `docs/screens/after-mobile.png` |
+
+The world view is the clearest comparison: four art styles at incompatible
+scales with visible tiling seams, against one coherent set on seamless ground.
+
+## Bugs found and fixed along the way
+
+These were not in the brief. Each was found because a refactor or a new test
+made it visible.
+
+1. **Iron was unobtainable.** `SMELT_RECIPES` mapped `iron_ore → iron_ingot`, but
+   `iron_ore` was not an `ItemType` and mining an iron node had no entry in the
+   drop table, so it yielded nothing. Iron ingots, all three iron tools and the
+   antenna could never be crafted. Found by typing the item table.
+2. **Touch could not harvest.** The action button sent Space, but `interact()`
+   acts on `selectedResourceId`, which only the mouse sets by hovering. The
+   button was inert. Found by making the mobile test assert on drops instead of
+   on the absence of exceptions.
+3. **Touch input wrote to a dead key set.** Extracting the Engine moved the key
+   set inside it while `TouchControls` kept the component's old ref. The mobile
+   test passed anyway because it compared screenshots, which change every tick
+   from animation.
+4. **A keypress shorter than a frame was dropped.** `keyup` deleted the key
+   before the update tick ran — the faster the machine, the more often. One-shot
+   keys are latched now.
+5. **Sheet grids disagreed with the art.** The player draw hardcoded 6×3 and
+   animals 6×8; standing animals sampled off the end of the sheet and drew
+   nothing. Both read the manifest now.
+6. **Draw size came from sprite pixels**, so the smaller atlas frames shrank
+   every object in the world. Sizes are authored in the manifest, as the brief
+   requires.
+7. **Blight tinted whole chunks**, drawing a hard straight edge across the world
+   wherever the per-chunk flag flipped. Sampled per pixel now.
+8. **The crafting UI reimplemented crafting**, duplicating the logic the tested
+   system owned — two implementations free to drift apart.
+9. **The smoke test's inventory check was a false positive**: "INVENTORY"
+   matched the keyboard hint bar, so it passed while the overlay never opened.
+10. **Lint had never run.** `eslint-config-next` loads a patch that throws under
+    ESLint 9 flat config, so both configs were dead; `ignoreDuringBuilds: true`
+    hid it.
+
+## Not done
+
+- **A tree still pops rather than falling and fading**, and there is no
+  item-pickup arc or campfire smoke. The higher-payoff juice from the brief's
+  list is in (harvest bursts, hit flash and shake, floating labels, footstep
+  dust, leaf sway, day/night grade); these three are not.
+- **Phase 9 profiling found nothing worth fixing.** Frame time on a throttled
+  mid-range Android profile is a median of 17.0ms — essentially 60fps — so the
+  chunk culling, object pooling and dirty-flag work the brief anticipated would
+  have been optimisation without a measured problem. The brief says to fix what
+  is actually slow; nothing was.
+- **The 25-step manual checklist has not been run end to end by a human.** The
+  automated suites cover 22 of the 25 steps; the three they do not are noted in
+  `TEST_CHECKLIST.md`.

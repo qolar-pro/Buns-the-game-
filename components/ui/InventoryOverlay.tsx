@@ -21,6 +21,46 @@ import type {
 
 /** First cell of the player sheet, used for the equipment paper doll. */
 const PLAYER_FRAME = FRAMES['characters/player'];
+/**
+ * One cell of the player sheet, for the equipment paper doll.
+ *
+ * The frame rectangle covers the whole 8x4 sheet, so it is cropped to a single
+ * cell by an overflow-hidden window with the atlas offset inside it — the same
+ * shape as ItemIcon, rather than background-size arithmetic that has to agree
+ * with the atlas scale.
+ */
+const DOLL_GRID = PLAYER_FRAME.grid ?? { cols: 8, rows: 4, cellW: 64, cellH: 96 };
+const DOLL_SCALE = 128 / DOLL_GRID.cellH;
+
+function PaperDoll() {
+  return (
+    <div
+      style={{
+        width: DOLL_GRID.cellW * DOLL_SCALE,
+        height: DOLL_GRID.cellH * DOLL_SCALE,
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+      aria-hidden
+    >
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: PLAYER_FRAME.w,
+          height: PLAYER_FRAME.h,
+          backgroundImage: `url(/sprites/${PLAYER_FRAME.atlas}.png)`,
+          backgroundPosition: `-${PLAYER_FRAME.x}px -${PLAYER_FRAME.y}px`,
+          backgroundRepeat: 'no-repeat',
+          transform: `scale(${DOLL_SCALE})`,
+          transformOrigin: 'top left',
+          imageRendering: 'pixelated',
+        }}
+      />
+    </div>
+  );
+}
 
 export const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameState, refreshUI: () => void, onClose: () => void }) => {
   const [draggedItem, setDraggedItem] = useState<{ index: number, from: 'inventory' | 'equipment' | 'chest' | 'furnace', slot?: string } | null>(null);
@@ -157,15 +197,7 @@ export const InventoryOverlay = ({ state, refreshUI, onClose }: { state: GameSta
                {/* Paper Doll */}
                <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
                   {/* Paper doll: the player sheet's first cell, taken from the atlas. */}
-                  <div
-                    className="w-32 h-32 pixelated"
-                    style={{
-                      backgroundImage: `url(/sprites/${PLAYER_FRAME.atlas}.png)`,
-                      backgroundPosition: `-${PLAYER_FRAME.x}px -${PLAYER_FRAME.y}px`,
-                      backgroundRepeat: 'no-repeat',
-                      imageRendering: 'pixelated',
-                    }}
-                  />
+                  <PaperDoll />
                </div>
                
                {/* Slots around player */}

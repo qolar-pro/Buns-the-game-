@@ -7,6 +7,25 @@ A phase that breaks any item is reverted, not patched forward.
 **How to run:** `npm run dev`, open http://localhost:3000, click *New Game*, then work down the list.
 Record `PASS` / `FAIL` in the phase columns. Budget ~8 minutes for a full pass.
 
+### Automated coverage
+
+Most of this list is now checked automatically, which is what made it practical to
+re-run after every extraction:
+
+```bash
+node scripts/smoke-test.mjs     # 12 checks: boot, render, movement, harvesting,
+                                # inventory, crafting, hotbar, pause, save, 404s
+node scripts/mobile-test.mjs    # 10 checks: touch layer, stick, action button,
+                                # sheets, frame time, portrait gate
+npm test                        # 44 unit tests, including save migration
+node scripts/audit-assets.mjs   # 0 missing, 0 unused
+```
+
+**Three steps still need a human**, because they are about judgement rather than
+state: item **5** (does the player read as *behind* the tree), **22** (does the
+day/night ramp look smooth, not steppy), and **24** (do the animals move
+believably). Everything else has an automated equivalent.
+
 ## Controls reference
 
 | Key | Action |
