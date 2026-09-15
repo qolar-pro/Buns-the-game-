@@ -26,8 +26,13 @@ export const SMELT_RECIPES: Record<string, string> = {
   'raw_pork': 'cooked_pork',
   'mutton': 'cooked_mutton',
   'raw_chicken': 'cooked_chicken',
-  'scrap_metal': 'copper_wiring',
   'iron_ore': 'iron_ingot',
+  'copper_ore': 'copper_ingot',
+  'titanium_ore': 'titanium_ingot',
+  // Salvage, not ore: scrap is looted from dungeon ruins. This is the step that
+  // makes going underground mandatory rather than optional, since copper wiring
+  // is what the antenna needs most of.
+  'scrap_metal': 'copper_wiring',
 };
 
 export const FUEL_VALUES: Record<string, number> = {
