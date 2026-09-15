@@ -10,6 +10,7 @@
 import { CHUNK_SIZE, PLAYER_SIZE } from '../core/config';
 import { assets } from '../assets/AssetRegistry';
 import { drawLighting } from './LightingRenderer';
+import { drawFloatingTexts } from '../systems/feedback';
 import { drawWorldObject, isWorldObject } from './PropRenderer';
 import { FRAMES } from '../assets/frames';
 import { publishHud, toHotbar } from '../core/HudStore';
@@ -380,6 +381,9 @@ export function createRenderer({
         }
       }
     });
+
+    // "+1 Wood" labels sit above the world but under the night overlay.
+    drawFloatingTexts(ctx, state.floatingTexts);
 
     ctx.restore();
 

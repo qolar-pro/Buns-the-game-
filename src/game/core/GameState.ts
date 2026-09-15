@@ -46,6 +46,7 @@ export function createGameState(): GameState {
     animals: [],
     enemies: [],
     particles: [],
+    floatingTexts: [],
     camera: {
       x: 0,
       y: 0,

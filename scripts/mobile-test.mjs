@@ -64,13 +64,40 @@ check(
   xBefore === null ? 'no engine handle (production build?)' : `x ${Math.round(xBefore)} -> ${Math.round(xAfter)}`,
 );
 
-// Action button should drive a harvest without throwing.
+// The action button must actually harvest. Desktop picks a target by hovering;
+// touch has no hover, so before the nearest-target fix this button did nothing
+// at all — and no test noticed, because it only checked for thrown errors.
 const errsBefore = errors.length;
-for (let i = 0; i < 10; i++) {
+await page.evaluate(() => {
+  // Stand next to something gatherable bare-handed, so this tests the button
+  // and not the tool requirement — a tree correctly refuses without an axe.
+  const s = window.__buns?.state;
+  if (!s) return;
+  for (const [, list] of s.resources) {
+    for (const r of list) {
+      if (r.type === 'bush' || r.type === 'branch' || r.type === 'small_rock') {
+        s.player.x = r.x - 50;
+        s.player.y = r.y - 50;
+        return true;
+      }
+    }
+  }
+  return false;
+});
+await wait(600);
+let harvested = 0;
+for (let i = 0; i < 30 && harvested === 0; i++) {
   await page.getByLabel('Use or harvest').tap();
   await wait(140);
+  harvested = await page.evaluate(() =>
+    window.__buns ? window.__buns.state.floatingTexts.length + window.__buns.state.items.length : 0,
+  );
 }
-check('action button handled', errors.length === errsBefore);
+check(
+  'action button harvests',
+  harvested > 0 && errors.length === errsBefore,
+  `${harvested} drop(s)/label(s), ${errors.length - errsBefore} new error(s)`,
+);
 
 // Inventory opens as a full-screen sheet.
 await page.getByLabel('Open inventory').tap();

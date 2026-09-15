@@ -63,6 +63,8 @@ export interface Resource {
   growthStage?: number; // 0: sapling, 1: small tree, 2: tree
   inventory?: (InventorySlot | null)[]; // For chests and furnaces
   smeltTimer?: number;
+  /** When this node was last struck, for the white hit flash. */
+  lastHitAt?: number;
   fuelTimer?: number;
   maxFuelTimer?: number;
   growthTimer?: number;
@@ -120,6 +122,21 @@ export type RenderEntity =
     isTargeted?: boolean;
   };
 
+/**
+ * A short-lived "+1 Wood" that drifts upward from where a thing was gathered.
+ *
+ * Kept as plain data on state so the systems can spawn one without reaching for
+ * the renderer, and so it serialises with a save like everything else.
+ */
+export interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  colour: string;
+  /** Counts down to 0, then the entry is dropped. */
+  life: number;
+}
+
 export interface Particle {
   x: number;
   y: number;
@@ -160,6 +177,8 @@ export interface GameState {
   animals: Animal[];
   enemies: Enemy[];
   particles: Particle[];
+  /** Transient "+1 Wood" labels; see FloatingText. */
+  floatingTexts: FloatingText[];
   camera: {
     x: number;
     y: number;

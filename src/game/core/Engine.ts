@@ -21,6 +21,7 @@ import { createEntityRenderer } from '../render/EntityRenderer';
 import { createRenderer, type SpriteSet } from '../render/Renderer';
 import { createInputHandlers } from '../input/KeyboardMouse';
 import { createGameplay } from '../systems/gameplay';
+import { selectNearestTarget } from '../systems/targeting';
 import { addToInventory as invAdd, removeFromInventory as invRemove } from '../systems/inventory';
 import { applySave } from '../save/serialize';
 import { readSlot as loadSlot } from '../save/storage';
@@ -431,7 +432,12 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
   // Dev-only handle, so the running world can be inspected from the console or
   // a test without threading state through React.
   if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
-    (window as unknown as { __buns?: unknown }).__buns = { state, keys };
+    (window as unknown as { __buns?: unknown }).__buns = {
+      state,
+      keys,
+      latched,
+      selectNearestTarget: () => selectNearestTarget(state),
+    };
   }
 
   return {
@@ -439,6 +445,8 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
     state,
     keys,
     latched,
+    /** Touch has no hover, so the action button picks a target itself. */
+    selectNearestTarget: () => selectNearestTarget(state),
     setDebugColliders: (on: boolean) => { debugColliders.current = on; },
     stop,
   };
@@ -451,6 +459,8 @@ export interface Engine {
   keys: Set<string>;
   /** One-shot presses awaiting the next tick. */
   latched: Set<string>;
+  /** Select the nearest resource or animal in reach; used by touch. */
+  selectNearestTarget: () => boolean;
   setDebugColliders: (on: boolean) => void;
   stop: () => void;
 }

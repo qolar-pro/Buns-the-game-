@@ -7,6 +7,7 @@
  */
 import { PLAYER_SIZE } from '../core/config';
 import { soundManager } from '../../../lib/SoundManager';
+import { addFloatingText } from './feedback';
 import { SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
 import type { Animal, AnimalType, Enemy, EntityType, GameState, ItemType, Resource } from '../core/types';
 
@@ -255,6 +256,7 @@ export function createInteraction({
       }
 
       res.hits += damage;
+      res.lastHitAt = Date.now();
       state.shake = 8;
     
       // Distinct per material: one sound for everything made wood and stone
@@ -277,6 +279,10 @@ export function createInteraction({
 
           // Drop wood
           const dropCount = Math.floor(8 * res.scale);
+          if (dropCount > 0) {
+            addFloatingText(state, res.x + dims.w / 2, res.y + dims.h * 0.3, 'wood', dropCount);
+          }
+
           for (let d = 0; d < dropCount; d++) {
             state.items.push({
               id: `item-${Date.now()}-${Math.random()}`,
@@ -355,6 +361,10 @@ export function createInteraction({
             dropCount = Math.floor(4 * res.scale);
           }
         
+          if (dropCount > 0) {
+            addFloatingText(state, res.x + dims.w / 2, res.y + dims.h * 0.3, dropType, dropCount);
+          }
+
           for (let d = 0; d < dropCount; d++) {
             state.items.push({
               id: `item-${Date.now()}-${Math.random()}`,

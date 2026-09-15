@@ -18,13 +18,15 @@ export interface TouchControlsProps {
   keys: Set<string>;
   /** One-shot presses, so a tap shorter than a frame is not dropped. */
   latched: Set<string>;
+  /** Picks what the action button acts on, since touch has no hover. */
+  selectNearestTarget: () => boolean;
   onOpenInventory: () => void;
 }
 
 /** Below this fraction of the stick radius, treat input as neutral. */
 const DEAD_ZONE = 0.22;
 
-export function TouchControls({ keys, latched, onOpenInventory }: TouchControlsProps) {
+export function TouchControls({ keys, latched, selectNearestTarget, onOpenInventory }: TouchControlsProps) {
   const stickRef = useRef<HTMLDivElement>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
   const pointerIdRef = useRef<number | null>(null);
@@ -113,6 +115,9 @@ export function TouchControls({ keys, latched, onOpenInventory }: TouchControlsP
    * between frames still registers, exactly as for the keyboard.
    */
   const doAction = () => {
+    // Desktop selects by hovering; touch has nothing hovered, so choose the
+    // nearest valid target first or the action would do nothing at all.
+    selectNearestTarget();
     keys.add('Space');
     latched.add('Space');
   };

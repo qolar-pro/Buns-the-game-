@@ -13,6 +13,7 @@ import { idForEntity } from '../assets/colliders';
 import { createInteraction } from './interaction';
 import { updateCreatures } from './animals';
 import { updateSurvival } from './survival';
+import { addFloatingText, updateFloatingTexts } from './feedback';
 import { soundManager } from '../../../lib/SoundManager';
 import { CollisionLayer, SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
 import type { AnimalType, EntityType, GameState, ItemType } from '../core/types';
@@ -411,11 +412,14 @@ export function createGameplay({
       if (dist < 60) {
         if (addToInventory(item.type, 1)) {
           soundManager.playPickup();
+          addFloatingText(state, item.x, item.y, item.type, 1);
           return false;
         }
       }
       return true;
     });
+
+    updateFloatingTexts(state, dt);
 
     // Animals and enemies live in src/game/systems/animals.ts.
     updateCreatures(state, dt, now, { spawnEnemy, spawnItem });

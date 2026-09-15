@@ -87,13 +87,40 @@ await wait(400);
 const after = await page.screenshot();
 check('movement changes the view', !before.equals(after), `${before.length} vs ${after.length} bytes`);
 
-// Harvesting: swing at whatever is nearby and confirm the game does not throw.
+// Harvesting must actually yield something, not merely avoid throwing.
+// Harvesting needs a selected target, which the mouse normally supplies by
+// hovering; stand next to something gatherable and select it directly so the
+// check is about the harvest, not about aiming.
 const errsBefore = errors.length;
-for (let i = 0; i < 20; i++) {
+await page.evaluate(() => {
+  const s = window.__buns?.state;
+  if (!s) return;
+  for (const [, list] of s.resources) {
+    for (const r of list) {
+      // Bare-handed targets only: a tree correctly refuses without an axe.
+      if (r.type === 'bush' || r.type === 'branch' || r.type === 'small_rock') {
+        s.player.x = r.x - 50;
+        s.player.y = r.y - 50;
+        s.selectedResourceId = r.id;
+        return;
+      }
+    }
+  }
+});
+await wait(500);
+let yielded = 0;
+for (let i = 0; i < 25 && yielded === 0; i++) {
   await tap('Space', 60);
   await wait(80);
+  yielded = await page.evaluate(() =>
+    window.__buns ? window.__buns.state.floatingTexts.length + window.__buns.state.items.length : 0,
+  );
 }
-check('harvest input handled', errors.length === errsBefore, `${errors.length - errsBefore} new error(s)`);
+check(
+  'harvesting yields drops',
+  yielded > 0 && errors.length === errsBefore,
+  `${yielded} drop(s)/label(s), ${errors.length - errsBefore} new error(s)`,
+);
 
 // Inventory overlay.
 // Harvesting above may have opened a workbench or chest, which replaces the

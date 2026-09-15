@@ -10,6 +10,7 @@ import { idForEntity } from '../assets/colliders';
 import type { ColliderShape } from '../../../lib/SpriteCollider';
 import { ROCK_COLOR } from '../core/config';
 import { hash } from '../world/noise';
+import { HIT_FLASH_MS } from '../systems/feedback';
 import type { EntityType, Resource } from '../core/types';
 
 type Sprite = HTMLCanvasElement;
@@ -55,6 +56,14 @@ export function drawWorldObject(
   ent: Resource & { isTargeted?: boolean },
   { sprites, colliders, anim, debugColliders, getResourceDimensions }: PropRenderDeps,
 ): void {
+  // A struck object washes out briefly. Two frames of white is the cheapest
+  // possible "that landed" signal and reads even when the sprite barely moves.
+  const flashing = ent.lastHitAt !== undefined && Date.now() - ent.lastHitAt < HIT_FLASH_MS;
+  if (flashing) {
+    ctx.save();
+    ctx.filter = 'brightness(2.4) saturate(0.25)';
+  }
+
   if (PROP_TYPES.has(String(ent.type))) {
     const e = ent as Resource & { isTargeted?: boolean };
     ctx.globalAlpha = e.opacity ?? 1;
@@ -375,4 +384,6 @@ export function drawWorldObject(
     ctx.restore();
     ctx.globalAlpha = 1;
   }
+
+  if (flashing) ctx.restore();
 }

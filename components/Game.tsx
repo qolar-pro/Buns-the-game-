@@ -142,6 +142,7 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         <TouchControls
           keys={engineRef.current.keys}
           latched={engineRef.current.latched}
+          selectNearestTarget={engineRef.current.selectNearestTarget}
           onOpenInventory={() => {
             const st = stateRef.current;
             st.isInventoryOpen = !st.isInventoryOpen;
