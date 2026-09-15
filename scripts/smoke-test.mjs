@@ -12,6 +12,20 @@ import { chromium } from 'playwright-core';
 
 const TARGET = process.argv[2] || 'http://localhost:3000/';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Press a key for long enough that the game's update tick sees it.
+ *
+ * Playwright's `press` is down+up in well under a frame. The engine latches
+ * one-shot keys so that no longer drops input, but holding briefly is what a
+ * human does and keeps the test honest about real behaviour.
+ */
+let page;
+const tap = async (code, ms = 120) => {
+  await page.keyboard.down(code);
+  await wait(ms);
+  await page.keyboard.up(code);
+};
 const results = [];
 const check = (name, pass, detail = '') => {
   results.push({ name, pass, detail });
@@ -22,7 +36,7 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=swiftshader'],
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 
 const errors = [];
 const missing404 = new Set();
@@ -76,28 +90,65 @@ check('movement changes the view', !before.equals(after), `${before.length} vs $
 // Harvesting: swing at whatever is nearby and confirm the game does not throw.
 const errsBefore = errors.length;
 for (let i = 0; i < 20; i++) {
-  await page.keyboard.press('Space');
-  await wait(120);
+  await tap('Space', 60);
+  await wait(80);
 }
 check('harvest input handled', errors.length === errsBefore, `${errors.length - errsBefore} new error(s)`);
 
 // Inventory overlay.
-await page.keyboard.press('KeyE');
-await wait(1000);
-const invOpen = await page.getByText('INVENTORY', { exact: false }).first().isVisible().catch(() => false);
+// Harvesting above may have opened a workbench or chest, which replaces the
+// crafting column with that container's grid. Toggling twice clears it, so the
+// crafting check below always sees the same panel.
+await tap('KeyE');
+await wait(400);
+await tap('KeyE');
+await wait(400);
+await tap('KeyE');
+// The overlay animates in; wait for it rather than a fixed guess.
+await page.locator('.grid-cols-3').first().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+await wait(400);
+const invOpen = await page
+  .getByText('Inventory & Crafting', { exact: false })
+  .first()
+  .isVisible()
+  .catch(() => false);
 check('inventory opens', invOpen);
-await page.keyboard.press('KeyE');
+
+// Crafting goes through the shared system; clicking a recipe must not throw
+// whether or not the player can afford it.
+if (invOpen) {
+  const errsBeforeCraft = errors.length;
+  // Recipe rows are the clickable entries in the crafting column. The overlay
+  // animates in, so poll rather than sampling once.
+  const recipes = page.locator('.grid.grid-cols-3 > div');
+  let n = 0;
+  for (let i = 0; i < 20 && n === 0; i++) {
+    n = await recipes.count();
+    if (n === 0) await wait(250);
+  }
+  if (n > 0) {
+    await recipes.first().click({ force: true }).catch(() => {});
+    await wait(500);
+  }
+  check(
+    'crafting list renders and a recipe click is handled',
+    n > 0 && errors.length === errsBeforeCraft,
+    `${n} recipe row(s), ${errors.length - errsBeforeCraft} new error(s)`,
+  );
+}
+
+await tap('KeyE');
 await wait(600);
 
 // Hotbar selection should not throw.
 for (const k of ['Digit1', 'Digit2', 'Digit3']) {
-  await page.keyboard.press(k);
+  await tap(k);
   await wait(150);
 }
 check('hotbar selection handled', true);
 
 // Pause menu and save.
-await page.keyboard.press('Escape');
+await tap('Escape');
 await wait(800);
 const paused = await page.getByText('PAUSED', { exact: false }).isVisible().catch(() => false);
 check('pause menu opens', paused);

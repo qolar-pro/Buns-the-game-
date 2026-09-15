@@ -6,6 +6,8 @@
  * and dt it mutates state and nothing else.
  */
 import { PLAYER_SIZE } from '../core/config';
+import { soundManager } from '../../../lib/SoundManager';
+import { nightStrength } from '../render/LightingRenderer';
 import { updateSmelting } from './smelting';
 import type { GameState, ItemType } from '../core/types';
 
@@ -19,6 +21,15 @@ export interface SurvivalDeps {
  * `now` is passed in so every system in one tick agrees on the time, as they
  * did when this ran inline.
  */
+/** Last night level seen, so the sting fires on the turn rather than every tick. */
+let wasNight = false;
+/** Throttles the low-health heartbeat to a believable rate. */
+let lastHeartbeat = 0;
+
+/** Below this health, the heartbeat starts. */
+const CRITICAL_HEALTH = 25;
+const HEARTBEAT_INTERVAL_MS = 900;
+
 export function updateSurvival(
   state: GameState,
   dt: number,
@@ -26,6 +37,26 @@ export function updateSurvival(
   { removeFromInventory }: SurvivalDeps,
 ): void {
   const { player } = state;
+
+  // Ambient bed follows the clock, so dusk is a crossfade rather than a cut.
+  const night = nightStrength(state.time);
+  soundManager.setAmbientMix(night);
+
+  // One sting on each turn, not on every frame of the ramp.
+  const isNight = night > 0.5;
+  if (isNight !== wasNight) {
+    soundManager.playDayNightSting(isNight);
+    wasNight = isNight;
+  }
+
+  // A heartbeat while health is critical: the clearest signal that the next
+  // hit matters, without taking over the screen.
+  if (player.health > 0 && player.health < CRITICAL_HEALTH) {
+    if (now - lastHeartbeat > HEARTBEAT_INTERVAL_MS) {
+      soundManager.playHeartbeat();
+      lastHeartbeat = now;
+    }
+  }
 
   // Update defense
   let defense = 0;
@@ -68,6 +99,7 @@ export function updateSurvival(
         removeFromInventory(selectedItem.type, 1);
         state.message = { text: `Ate ${selectedItem.type.replace('_', ' ')}`, time: now };
         state.lastEatTime = now;
+        soundManager.playEat();
       
         // Eating particles
         for (let i = 0; i < 5; i++) {

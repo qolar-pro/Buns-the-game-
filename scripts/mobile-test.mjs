@@ -42,18 +42,27 @@ check('touch layer appears', await page.getByLabel('Movement stick').isVisible()
 check('action button appears', await page.getByLabel('Use or harvest').isVisible());
 check('hotbar fits the viewport', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 
-// Drive the stick: press near its centre and drag right.
+// Drive the stick and assert on the player's actual position. Comparing
+// screenshots is not enough: animation changes the frame every tick, so that
+// check passed even when the touch layer was writing to a key set the engine
+// never read.
+const playerX = () =>
+  page.evaluate(() => (window.__buns ? window.__buns.state.player.x : null));
+
 const stick = await page.getByLabel('Movement stick').boundingBox();
-const before = await page.screenshot();
-await page.touchscreen.tap(stick.x + stick.width / 2, stick.y + stick.height / 2);
+const xBefore = await playerX();
 await page.mouse.move(stick.x + stick.width / 2, stick.y + stick.height / 2);
 await page.mouse.down();
 await page.mouse.move(stick.x + stick.width, stick.y + stick.height / 2, { steps: 8 });
 await wait(1500);
 await page.mouse.up();
 await wait(400);
-const after = await page.screenshot();
-check('virtual stick moves the player', !before.equals(after));
+const xAfter = await playerX();
+check(
+  'virtual stick moves the player',
+  xBefore !== null && xAfter !== null && Math.abs(xAfter - xBefore) > 20,
+  xBefore === null ? 'no engine handle (production build?)' : `x ${Math.round(xBefore)} -> ${Math.round(xAfter)}`,
+);
 
 // Action button should drive a harvest without throwing.
 const errsBefore = errors.length;

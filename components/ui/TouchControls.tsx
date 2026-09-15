@@ -15,14 +15,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface TouchControlsProps {
   /** The engine's live key set, written to directly. */
-  keys: React.MutableRefObject<Set<string>>;
+  keys: Set<string>;
+  /** One-shot presses, so a tap shorter than a frame is not dropped. */
+  latched: Set<string>;
   onOpenInventory: () => void;
 }
 
 /** Below this fraction of the stick radius, treat input as neutral. */
 const DEAD_ZONE = 0.22;
 
-export function TouchControls({ keys, onOpenInventory }: TouchControlsProps) {
+export function TouchControls({ keys, latched, onOpenInventory }: TouchControlsProps) {
   const stickRef = useRef<HTMLDivElement>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
   const pointerIdRef = useRef<number | null>(null);
@@ -32,7 +34,7 @@ export function TouchControls({ keys, onOpenInventory }: TouchControlsProps) {
   const DIRECTIONS = ['KeyW', 'KeyA', 'KeyS', 'KeyD'] as const;
 
   const clearMovement = useCallback(() => {
-    for (const k of DIRECTIONS) keys.current.delete(k);
+    for (const k of DIRECTIONS) keys.delete(k);
   }, [keys]);
 
   /** Map a stick offset to the direction keys the engine already understands. */
@@ -46,10 +48,10 @@ export function TouchControls({ keys, onOpenInventory }: TouchControlsProps) {
       // holding two keys at once does.
       const nx = dx / radius;
       const ny = dy / radius;
-      if (ny < -DEAD_ZONE) keys.current.add('KeyW');
-      if (ny > DEAD_ZONE) keys.current.add('KeyS');
-      if (nx < -DEAD_ZONE) keys.current.add('KeyA');
-      if (nx > DEAD_ZONE) keys.current.add('KeyD');
+      if (ny < -DEAD_ZONE) keys.add('KeyW');
+      if (ny > DEAD_ZONE) keys.add('KeyS');
+      if (nx < -DEAD_ZONE) keys.add('KeyA');
+      if (nx > DEAD_ZONE) keys.add('KeyD');
     },
     [clearMovement, keys],
   );
@@ -96,18 +98,24 @@ export function TouchControls({ keys, onOpenInventory }: TouchControlsProps) {
     setSprinting((on) => {
       const next = !on;
       if (next) {
-        keys.current.add('Shift');
-        keys.current.add('ShiftLeft');
+        keys.add('Shift');
+        keys.add('ShiftLeft');
       } else {
-        keys.current.delete('Shift');
-        keys.current.delete('ShiftLeft');
+        keys.delete('Shift');
+        keys.delete('ShiftLeft');
       }
       return next;
     });
   };
 
-  /** The engine consumes Space once and deletes it, so a tap is enough. */
-  const doAction = () => keys.current.add('Space');
+  /**
+   * The tick consumes Space once. Latching it too means a tap that lands
+   * between frames still registers, exactly as for the keyboard.
+   */
+  const doAction = () => {
+    keys.add('Space');
+    latched.add('Space');
+  };
 
   const buttonStyle =
     'flex items-center justify-center rounded-full border-2 border-[#7c4d23] bg-black/55 font-mono text-white active:bg-white/20 select-none';

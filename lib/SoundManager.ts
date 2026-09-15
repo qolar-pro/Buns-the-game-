@@ -1,4 +1,5 @@
 import { debugError } from '@/lib/debug';
+import { AmbientBed } from '@/lib/AmbientBed';
 /**
  * SoundManager using Web Audio API to generate procedural sounds.
  */
@@ -6,6 +7,8 @@ export class SoundManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private ambientGain: GainNode | null = null;
+  /** The two-layer ambient bed; crossfaded by setAmbientMix. */
+  private ambient: AmbientBed | null = null;
   private sfxGain: GainNode | null = null;
   private isInitialized = false;
 
@@ -33,7 +36,8 @@ export class SoundManager {
       this.sfxGain.connect(this.masterGain);
 
       this.isInitialized = true;
-      this.startAmbient();
+      this.ambient = new AmbientBed(this.ctx, this.ambientGain);
+      this.ambient.start();
     } catch (e) {
       debugError('Failed to initialize AudioContext', e);
     }
@@ -48,78 +52,7 @@ export class SoundManager {
     }
   }
 
-  private startAmbient() {
-    if (!this.ctx || !this.ambientGain) return;
 
-    // Wind sound (White noise + Low pass filter)
-    const bufferSize = 2 * this.ctx.sampleRate;
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
-    }
-
-    const whiteNoise = this.ctx.createBufferSource();
-    whiteNoise.buffer = noiseBuffer;
-    whiteNoise.loop = true;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 400;
-    filter.Q.value = 1;
-
-    const windGain = this.ctx.createGain();
-    windGain.gain.value = 0.1;
-
-    whiteNoise.connect(filter);
-    filter.connect(windGain);
-    windGain.connect(this.ambientGain);
-
-    whiteNoise.start();
-
-    // Modulate wind
-    const modulateWind = () => {
-      if (!this.ctx) return;
-      const now = this.ctx.currentTime;
-      filter.frequency.exponentialRampToValueAtTime(200 + Math.random() * 600, now + 2 + Math.random() * 3);
-      windGain.gain.linearRampToValueAtTime(0.05 + Math.random() * 0.1, now + 2 + Math.random() * 3);
-      setTimeout(modulateWind, 3000 + Math.random() * 2000);
-    };
-    modulateWind();
-
-    // Occasional birds
-    const playBird = () => {
-      if (!this.ctx || !this.ambientGain || this.ctx.state !== 'running') {
-        setTimeout(playBird, 5000);
-        return;
-      }
-      this.playBirdChirp();
-      setTimeout(playBird, 10000 + Math.random() * 20000);
-    };
-    playBird();
-  }
-
-  private playBirdChirp() {
-    if (!this.ctx || !this.ambientGain) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(2000 + Math.random() * 1000, now);
-    osc.frequency.exponentialRampToValueAtTime(3000 + Math.random() * 1000, now + 0.1);
-    osc.frequency.exponentialRampToValueAtTime(2000 + Math.random() * 1000, now + 0.2);
-
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.05, now + 0.05);
-    gain.gain.linearRampToValueAtTime(0, now + 0.2);
-
-    osc.connect(gain);
-    gain.connect(this.ambientGain);
-
-    osc.start(now);
-    osc.stop(now + 0.2);
-  }
 
   public playFootstep() {
     if (!this.ctx || !this.sfxGain || this.ctx.state !== 'running') return;
@@ -264,6 +197,134 @@ export class SoundManager {
       noise.start(t);
       noise.stop(t + 0.05);
     }
+  }
+
+  // --- Added in the overhaul -------------------------------------------------
+  // The original had chop, mine, hit, craft, click and animal calls. These fill
+  // in the feedback the game was missing: picking things up, eating, placing,
+  // opening containers, low health, and the day/night turn.
+
+  /** A short shaped tone. The building block for most of the cues below. */
+  private tone(
+    freq: number,
+    duration: number,
+    opts: { type?: OscillatorType; gain?: number; delay?: number; sweepTo?: number } = {},
+  ) {
+    if (!this.ctx || !this.sfxGain || this.ctx.state !== 'running') return;
+    const t = this.ctx.currentTime + (opts.delay ?? 0);
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = opts.type ?? 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    if (opts.sweepTo) osc.frequency.exponentialRampToValueAtTime(opts.sweepTo, t + duration);
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(opts.gain ?? 0.12, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(t);
+    osc.stop(t + duration);
+  }
+
+  /**
+   * Harvest feedback, distinct per material.
+   *
+   * One sound for every material made wood and stone indistinguishable by ear,
+   * which matters because the player often harvests off-screen edges.
+   */
+  public playHarvest(material: 'wood' | 'stone' | 'ore' | 'plant' | 'wool') {
+    switch (material) {
+      case 'wood':
+        this.playChop();
+        break;
+      case 'stone':
+        this.playMine();
+        break;
+      case 'ore':
+        // Brighter and more metallic than plain stone.
+        this.playMine();
+        this.tone(880, 0.12, { type: 'triangle', gain: 0.07, delay: 0.04 });
+        break;
+      case 'plant':
+        this.tone(320, 0.09, { type: 'sawtooth', gain: 0.05, sweepTo: 180 });
+        break;
+      case 'wool':
+        this.tone(200, 0.14, { type: 'sine', gain: 0.05, sweepTo: 150 });
+        break;
+    }
+  }
+
+  /** An item entering the inventory: two quick rising notes. */
+  public playPickup() {
+    this.tone(660, 0.07, { type: 'triangle', gain: 0.08 });
+    this.tone(990, 0.09, { type: 'triangle', gain: 0.07, delay: 0.06 });
+  }
+
+  /** Crafting refused — a recipe the player cannot afford. */
+  public playCraftFail() {
+    this.tone(200, 0.14, { type: 'square', gain: 0.06, sweepTo: 120 });
+  }
+
+  /** Eating: two soft muted thuds. */
+  public playEat() {
+    this.tone(180, 0.1, { type: 'sine', gain: 0.09, sweepTo: 130 });
+    this.tone(160, 0.12, { type: 'sine', gain: 0.07, sweepTo: 110, delay: 0.13 });
+  }
+
+  /** Setting an object down. */
+  public playPlace() {
+    this.tone(150, 0.1, { type: 'square', gain: 0.07, sweepTo: 90 });
+    this.tone(300, 0.06, { type: 'triangle', gain: 0.04, delay: 0.02 });
+  }
+
+  /** A chest or furnace opening. */
+  public playOpenContainer() {
+    this.tone(420, 0.1, { type: 'triangle', gain: 0.06, sweepTo: 620 });
+  }
+
+  /** And closing: the same shape, inverted. */
+  public playCloseContainer() {
+    this.tone(620, 0.1, { type: 'triangle', gain: 0.06, sweepTo: 420 });
+  }
+
+  /**
+   * Low-health heartbeat.
+   *
+   * Called from the survival tick while health is critical; the two-thump
+   * shape is what makes it read as a heartbeat rather than an error tone.
+   */
+  public playHeartbeat() {
+    this.tone(60, 0.16, { type: 'sine', gain: 0.22, sweepTo: 42 });
+    this.tone(55, 0.18, { type: 'sine', gain: 0.16, sweepTo: 38, delay: 0.2 });
+  }
+
+  /** A short sting when day turns to night, and the reverse. */
+  public playDayNightSting(toNight: boolean) {
+    if (toNight) {
+      this.tone(330, 0.5, { type: 'sine', gain: 0.08, sweepTo: 165 });
+      this.tone(220, 0.7, { type: 'sine', gain: 0.05, sweepTo: 110, delay: 0.1 });
+    } else {
+      this.tone(220, 0.5, { type: 'sine', gain: 0.07, sweepTo: 440 });
+      this.tone(330, 0.6, { type: 'triangle', gain: 0.04, sweepTo: 660, delay: 0.1 });
+    }
+  }
+
+  /**
+   * Crossfade the ambient bed between day and night.
+   *
+   * Two layers held at constant volume with their mix driven by the clock,
+   * rather than one loop that cuts over: a hard switch at dusk is the most
+   * obvious seam in an otherwise continuous soundscape.
+   */
+  public setAmbientMix(nightAmount: number) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const night = Math.max(0, Math.min(1, nightAmount));
+    const now = this.ctx.currentTime;
+    this.ambient?.dayLayer?.gain.setTargetAtTime(0.28 * (1 - night), now, 1.5);
+    this.ambient?.nightLayer?.gain.setTargetAtTime(0.22 * night, now, 1.5);
   }
 
   public playClick() {

@@ -13,6 +13,8 @@ import { HOTBAR_SLOTS, MAIN_INV_ROWS } from '@/src/game/core/config';
 import { CRAFTING_RECIPES } from '@/src/game/core/recipes';
 import { FRAMES } from '@/src/game/assets/frames';
 import { ItemIcon } from './ItemIcon';
+import { craftItem } from '@/src/game/systems/crafting';
+import { soundManager } from '@/lib/SoundManager';
 import type {
   EquipmentSlotName, GameState, Ingredient, InventorySlot, Recipe, Resource,
 } from '@/src/game/core/types';
@@ -261,40 +263,23 @@ export const RecipeUI = ({ recipe, state, refreshUI }: {
 
   const canCraft = hasIngredients(recipe.ingredients) && (!recipe.requiresWorkbench || state.isWorkbenchOpen);
 
+  /**
+   * Craft through the shared system rather than reimplementing it.
+   *
+   * This handler used to duplicate the ingredient-consumption and output-stacking
+   * logic that src/game/systems/crafting.ts already owns and that the unit tests
+   * cover — two implementations that could drift apart silently.
+   */
   const handleCraft = () => {
-    if (!canCraft) return;
-
-    // Remove ingredients
-    recipe.ingredients.forEach((ing: Ingredient) => {
-      let remaining = ing.count;
-      for (let i = 0; i < state.player.inventory.length; i++) {
-        const slot = state.player.inventory[i];
-        if (slot?.type === ing.type) {
-          const take = Math.min(remaining, slot.count);
-          slot.count -= take;
-          remaining -= take;
-          if (slot.count <= 0) state.player.inventory[i] = null;
-          if (remaining <= 0) break;
-        }
-      }
-    });
-
-    // Add output
-    let remainingOutput = recipe.count;
-    for (let i = 0; i < state.player.inventory.length; i++) {
-      const slot = state.player.inventory[i];
-      if (slot?.type === recipe.output && slot.count < 64) {
-        const add = Math.min(remainingOutput, 64 - slot.count);
-        slot.count += add;
-        remainingOutput -= add;
-        if (remainingOutput <= 0) break;
-      } else if (!slot) {
-        state.player.inventory[i] = { type: recipe.output, count: Math.min(remainingOutput, 64) };
-        remainingOutput -= state.player.inventory[i]!.count;
-        if (remainingOutput <= 0) break;
+    const result = craftItem(state, recipe.id);
+    if (result === 'ok') {
+      soundManager.playCraft();
+    } else {
+      soundManager.playCraftFail();
+      if (result === 'requires-workbench') {
+        state.message = { text: 'Requires Workbench', time: Date.now() };
       }
     }
-
     refreshUI();
   };
 

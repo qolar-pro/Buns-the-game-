@@ -14,6 +14,8 @@ export interface InputDeps {
   state: GameState;
   /** Held keys, by KeyboardEvent.code. Shared with the touch layer. */
   keys: Set<string>;
+  /** One-shot presses awaiting consumption by the update tick. */
+  latched: Set<string>;
   colliders: Map<string, ColliderShape>;
   canvas: () => HTMLCanvasElement | null;
   refreshUI: () => void;
@@ -41,8 +43,11 @@ export interface InputDeps {
  * A factory so the handler bodies moved across unchanged rather than being
  * rewritten around a new argument shape.
  */
+/** Keys the update tick consumes once per press rather than reading as held. */
+const LATCHED_KEYS = new Set(['Space', 'KeyE', 'KeyR', 'KeyN']);
+
 export function createInputHandlers({
-  state, keys, colliders, canvas, refreshUI,
+  state, keys, latched, colliders, canvas, refreshUI,
   removeFromInventory, spawnResource, getResourceDimensions, setPaused, setPauseMenuState,
   getAnimalSpriteInfo,
 }: InputDeps) {
@@ -57,6 +62,12 @@ export function createInputHandlers({
     }
 
     keys.add(e.code);
+    // One-shot actions are consumed by the update tick, which runs at most once
+    // per frame. A tap shorter than a frame would otherwise be added and removed
+    // by keyup before the tick ever saw it — dropped input, and the faster the
+    // machine the more often it happens.
+    if (LATCHED_KEYS.has(e.code)) latched.add(e.code);
+
     if (e.shiftKey || e.key === 'Shift') {
       keys.add('Shift');
       keys.add('ShiftLeft');
@@ -65,7 +76,8 @@ export function createInputHandlers({
   };
 
   const handleKeyUp = (e: KeyboardEvent) => {
-    keys.delete(e.code);
+    // A latched key stays readable until the tick consumes it.
+    if (!latched.has(e.code)) keys.delete(e.code);
     if (e.key === 'Shift') {
       keys.delete('Shift');
       keys.delete('ShiftLeft');
@@ -275,6 +287,7 @@ export function createInputHandlers({
 
           if (spawnResource(selectedItem.type as EntityType, placeX, placeY)) {
             removeFromInventory(selectedItem.type, 1);
+            soundManager.playPlace();
           }
         }
       }

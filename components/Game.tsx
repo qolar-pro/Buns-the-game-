@@ -56,7 +56,6 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
   /** Live game state. One object per session, owned by the engine. */
   const stateRef = useRef<GameState>(createGameState());
 
-  const keysRef = useRef<Set<string>>(new Set());
   
   // Tree Stage Refs
   /**
@@ -139,9 +138,10 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
 
       {isTouch && isPortrait && <RotatePrompt />}
 
-      {isTouch && assetsReady && (
+      {isTouch && assetsReady && engineRef.current && (
         <TouchControls
-          keys={keysRef}
+          keys={engineRef.current.keys}
+          latched={engineRef.current.latched}
           onOpenInventory={() => {
             const st = stateRef.current;
             st.isInventoryOpen = !st.isInventoryOpen;

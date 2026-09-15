@@ -23,6 +23,8 @@ export interface AnimCounter { value: number }
 export interface GameplayDeps {
   state: GameState;
   keys: Set<string>;
+  /** One-shot presses; consuming one clears it here as well as in `keys`. */
+  latched: Set<string>;
   colliders: Map<string, ColliderShape>;
   anim: AnimCounter;
   refreshUI: () => void;
@@ -44,7 +46,7 @@ export interface GameplayDeps {
 
 /** Bind the tick to a state and its helpers. */
 export function createGameplay({
-  state, keys, colliders, anim, refreshUI, startNewGame,
+  state, keys, latched, colliders, anim, refreshUI, startNewGame,
   addToInventory, removeFromInventory, spawnItem, spawnEnemy, spawnChunkResources,
   dropLoot, getResourceDimensions, getAnimalSpriteInfo,
 }: GameplayDeps) {
@@ -286,11 +288,13 @@ export function createGameplay({
 
     if (keys.has('Space')) {
       keys.delete('Space');
+      latched.delete('Space');
       interact();
     }
 
     if (keys.has('KeyR')) {
       keys.delete('KeyR');
+      latched.delete('KeyR');
       player.x = 0;
       player.y = 0;
       state.camera.x = player.x - state.width / 2;
@@ -300,12 +304,14 @@ export function createGameplay({
 
     if (keys.has('KeyN')) {
       keys.delete('KeyN');
+      latched.delete('KeyN');
       startNewGame();
     }
 
     // Toggle Inventory
     if (keys.has('KeyE')) {
       keys.delete('KeyE');
+      latched.delete('KeyE');
       state.isInventoryOpen = !state.isInventoryOpen;
       if (!state.isInventoryOpen) {
         state.isWorkbenchOpen = false;
@@ -404,6 +410,7 @@ export function createGameplay({
       const dist = Math.sqrt(Math.pow(player.x + PLAYER_SIZE/2 - item.x, 2) + Math.pow(player.y + PLAYER_SIZE/2 - item.y, 2));
       if (dist < 60) {
         if (addToInventory(item.type, 1)) {
+          soundManager.playPickup();
           return false;
         }
       }

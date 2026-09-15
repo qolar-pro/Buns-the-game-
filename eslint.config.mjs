@@ -19,6 +19,8 @@ export default [
       'coverage/**',
       'next-env.d.ts',
       'assets-src/**',
+      'assets-build/**',
+      'out/**',
       'public/**',
     ],
   },

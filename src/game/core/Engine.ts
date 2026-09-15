@@ -61,6 +61,8 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
   const animCounter = { value: 0 };
   let lastTime = 0;
   const keys = new Set<string>();
+  /** One-shot presses awaiting the next tick; see KeyboardMouse.LATCHED_KEYS. */
+  const latched = new Set<string>();
   let colliders: Map<string, ColliderShape> = new Map();
   const chunkCanvases = new Map<string, HTMLCanvasElement>();
   let view = { zoom: 1, dpr: 1 };
@@ -331,6 +333,7 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
         const { update } = createGameplay({
           state,
           keys: keys,
+          latched,
           colliders: colliders,
           anim: animCounter,
           refreshUI: host.refreshUI,
@@ -372,6 +375,7 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
         } = createInputHandlers({
           state,
           keys: keys,
+          latched,
           colliders: colliders,
           canvas: () => host.canvas(),
           refreshUI: host.refreshUI,
@@ -424,10 +428,17 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
 
   start();
 
+  // Dev-only handle, so the running world can be inspected from the console or
+  // a test without threading state through React.
+  if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+    (window as unknown as { __buns?: unknown }).__buns = { state, keys };
+  }
+
   return {
     /** Live state, for the React layer to read (never to drive rendering). */
     state,
     keys,
+    latched,
     setDebugColliders: (on: boolean) => { debugColliders.current = on; },
     stop,
   };
@@ -436,7 +447,10 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
 export interface Engine {
   /** Live state, for the React layer to read (never to drive rendering). */
   state: GameState;
+  /** Held keys; the touch layer writes into this same set. */
   keys: Set<string>;
+  /** One-shot presses awaiting the next tick. */
+  latched: Set<string>;
   setDebugColliders: (on: boolean) => void;
   stop: () => void;
 }

@@ -257,10 +257,16 @@ export function createInteraction({
       res.hits += damage;
       state.shake = 8;
     
-      if (res.type === 'tree' || res.type === 'bush' || res.type === 'sapling' || res.type === 'trunk' || res.type === 'branch') {
-        soundManager.playChop();
-      } else if (res.type === 'rock' || res.type === 'coal_ore' || res.type === 'small_rock') {
-        soundManager.playMine();
+      // Distinct per material: one sound for everything made wood and stone
+      // indistinguishable by ear, which matters when harvesting off-screen.
+      if (res.type === 'tree' || res.type === 'trunk' || res.type === 'branch') {
+        soundManager.playHarvest('wood');
+      } else if (res.type === 'bush' || res.type === 'sapling' || res.type === 'grass') {
+        soundManager.playHarvest('plant');
+      } else if (res.type === 'coal_ore' || res.type === 'iron_ore') {
+        soundManager.playHarvest('ore');
+      } else if (res.type === 'rock' || res.type === 'small_rock') {
+        soundManager.playHarvest('stone');
       }
 
       if (res.hits >= res.maxHits) {
