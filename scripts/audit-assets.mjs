@@ -138,6 +138,10 @@ const total = walk(PUBLIC_DIR)
   .filter((f) => IMAGE_EXT.has(extname(f)))
   .reduce((n, f) => n + statSync(f).size, 0);
 console.log(bold(`\nTOTAL art payload in public/: ${(total / 1024 / 1024).toFixed(2)} MB`));
-console.log(bold(`Budget: 2.50 MB — ${total / 1024 / 1024 <= 2.5 ? green('PASS') : red('FAIL')}\n`));
+// Kept in step with scripts/pack-atlases.mjs, where the reason for the number
+// is written down: raised from 2.50 MB when the asset count went from 113 to
+// 248, rather than met by quantising the art into visible banding.
+const BUDGET_MB = 3.5;
+console.log(bold(`Budget: ${BUDGET_MB.toFixed(2)} MB — ${total / 1024 / 1024 <= BUDGET_MB ? green('PASS') : red('FAIL')}\n`));
 
 process.exit(missing.length > 0 || unused.length > 0 ? 1 : 0);

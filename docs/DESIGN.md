@@ -85,15 +85,23 @@ Stats live in one table (`systems/mobs.ts`) and the dungeon scales them by
 depth; nothing about a mob is written down twice. Shades are the only thing
 light hurts, which is what makes a torch a weapon as well as a lamp.
 
-## The ending
+## The endings
 
 1. Craft the **antenna frame** (titanium + iron).
 2. Place it and feed it **copper wiring** until the structure is restored.
-3. Install the **signal core** from the Warden.
-4. Interact to **broadcast**.
+3. Take the **signal core** from the Warden.
+4. Spend it — on one of two things.
 
-Broadcasting ends the run and shows a summary: days survived, depth reached,
-things crafted, mobs defeated.
+The core fits the antenna and it fits the village hall's generator, and there is
+exactly one of them. That is the whole choice.
+
+- **RESCUED** — power the antenna, send the signal, leave.
+- **SETTLED** — power the village instead. Nobody is coming; by spring there are
+  forty of you.
+
+Neither is the good ending. The summary underneath is identical, because the run
+was. Committing to the village takes two presses, with a warning between them: an
+ending reached by an accidental keypress next to a building is not a choice.
 
 ## Farming
 
@@ -119,6 +127,63 @@ freely. Anything placed can be broken back into the item that made it.
 Six fragments, found in chests, that say who was here before and why the Vault
 is sealed. They are read on pickup and reveal in order. Nothing gates on them:
 they are the reason a chest holding "just a log" is still worth opening.
+
+## Biomes
+
+Two noise fields — temperature and moisture — pick a chunk's biome, the way a
+real climate map works. Thresholds were chosen by sweeping every combination
+against 6,561 sampled chunks for a target mix, not guessed; the world generator
+already shipped one "biome" gated above its own field's maximum, which fired
+never.
+
+| Biome | Share | Gates | Native |
+|---|---|---|---|
+| Meadows | 45% | — | wolves, shades (night only) |
+| The Dust Flats | 17% | **plant fibre** → every bow and quiver | sand scorpion |
+| The White Waste | 19% | **thick fur** → the fur armour set; frost crystals | frost wolf |
+| The Sunken Fen | 19% | **reeds** → arrows in bulk; bog iron | bog lurker |
+
+Each gate is a material the combat tree needs, so travel is rewarded with
+capability rather than with a collectible. The fen has no villages in it: it is
+the one biome with no help, which is most of its character.
+
+## Villages
+
+One chunk, a fixed street plan, and four residents. Roughly one village every
+twenty-five chunks, never within a chunk of spawn, never in the fen. Generated
+from the chunk coordinates, so a village is identical every time you walk back
+to it without being written to the save.
+
+- **Trade** is barter, not currency. A coin would need a source, a sink and a
+  price for everything, all balanced against a player who can mine forever.
+- **Requests** are side objectives: two per village, stable, each paying out
+  gear or a material from somewhere else. They are a shortcut past a journey.
+- **Safe haven**: nothing hostile spawns inside a settlement, and a bed at night
+  sleeps you to dawn — but only with nothing dangerous within 600 units.
+
+## Ranged combat
+
+Arrows are simulated, not hitscan: they travel, they can miss, and most of them
+survive to be picked back up. That last part is what stops ammunition being a
+tax on using the weapon.
+
+A bow in hand turns the action button into a shot, so there is no second button
+and the game plays the same on a phone. The sentinel is the one mob that fights
+at range — it was designed that way and shipped as a slow melee mob, which made
+it strictly worse than the crawler standing next to it.
+
+## Armour
+
+| Set | Defence | Speed | Where |
+|---|---|---|---|
+| Leather | 7 + 1 | +2% | anywhere |
+| Fur | 12 + 2 | +8% | the White Waste |
+| Chainmail | 15 + 3 | −3% | iron |
+| Titanium | 23 + 6 | −2% | the deep |
+
+The second number is the matched-set bonus. Fur sits between leather and
+chainmail and buys speed instead of plate, so the Waste is worth the walk on its
+own rather than only as a stop on the way to the end.
 
 ## Quest log
 

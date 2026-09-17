@@ -130,9 +130,15 @@ export const OBJECTIVES: Objective[] = [
     },
   },
   {
+    id: 'choose',
+    title: 'Decide what the core is for',
+    hint: 'The antenna calls a ship. The village generator lights a home. One core.',
+    done: (s) => s.progress.broadcast || s.progress.settleArmed,
+  },
+  {
     id: 'broadcast',
-    title: 'Install the signal core and broadcast',
-    hint: 'This ends the run. Make sure you are ready.',
+    title: 'Spend the core and end it',
+    hint: 'Install it in the antenna to be rescued, or in the village hall to stay.',
     done: (s) => s.progress.broadcast,
   },
 ];

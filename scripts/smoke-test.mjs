@@ -95,17 +95,22 @@ const errsBefore = errors.length;
 await page.evaluate(() => {
   const s = window.__buns?.state;
   if (!s) return;
+  // Nearest bare-hand target, not the first the map happens to yield: iteration
+  // order is arbitrary, so "first" could be most of a chunk away on some seeds.
+  let best = null;
+  let bestDist = Infinity;
   for (const [, list] of s.resources) {
     for (const r of list) {
-      // Bare-handed targets only: a tree correctly refuses without an axe.
-      if (r.type === 'bush' || r.type === 'branch' || r.type === 'small_rock') {
-        s.player.x = r.x - 50;
-        s.player.y = r.y - 50;
-        s.selectedResourceId = r.id;
-        return;
-      }
+      // A tree correctly refuses without an axe, so those are not candidates.
+      if (r.type !== 'bush' && r.type !== 'branch' && r.type !== 'small_rock') continue;
+      const d = Math.hypot(r.x - s.player.x, r.y - s.player.y);
+      if (d < bestDist) { best = r; bestDist = d; }
     }
   }
+  if (!best) return;
+  s.player.x = best.x - 50;
+  s.player.y = best.y - 50;
+  s.selectedResourceId = best.id;
 });
 await wait(500);
 let yielded = 0;

@@ -10,6 +10,7 @@ import { soundManager } from '../../../lib/SoundManager';
 import { nightStrength } from '../render/LightingRenderer';
 import { updateSmelting } from './smelting';
 import { foodValue } from './food';
+import { armourTotals, blockValue } from './armour';
 import type { GameState, ItemType } from '../core/types';
 
 export interface SurvivalDeps {
@@ -59,13 +60,12 @@ export function updateSurvival(
     }
   }
 
-  // Update defense
-  let defense = 0;
-  if (state.player.equipment.head?.type === 'leather_cap') defense += 1;
-  if (state.player.equipment.torso?.type === 'leather_tunic') defense += 3;
-  if (state.player.equipment.legs?.type === 'leather_pants') defense += 2;
-  if (state.player.equipment.feet?.type === 'leather_boots') defense += 1;
-  state.player.defense = defense;
+  // Defence comes from the armour table. It used to be four `if`s naming the
+  // four leather pieces, so chainmail, fur and the twenty-ingot titanium suit
+  // all protected the player exactly as much as bare skin.
+  const armour = armourTotals(state.player.equipment);
+  state.player.defense = armour.defense + blockValue(state);
+  state.player.speedMultiplier = armour.speed;
 
   // Update Furnaces
   updateSmelting(state, dt);
@@ -122,15 +122,11 @@ export function updateSurvival(
     return p.life > 0;
   });
 
-  // Calculate player defense
-  let playerDefense = 0;
-  if (player.equipment.head?.type === 'leather_cap') playerDefense += 1;
-  if (player.equipment.torso?.type === 'leather_tunic') playerDefense += 3;
-  if (player.equipment.legs?.type === 'leather_pants') playerDefense += 2;
-  if (player.equipment.feet?.type === 'leather_boots') playerDefense += 1;
-
   const takeDamage = (raw_damage: number) => {
-    const actual_damage = Math.max(1, raw_damage - playerDefense);
+    // The same defence the rest of the game uses. This was its own copy of the
+    // old four-leather-pieces chain, so starving in a full titanium suit hurt
+    // exactly as much as starving naked.
+    const actual_damage = Math.max(1, raw_damage - player.defense);
     player.health = Math.max(0, player.health - actual_damage);
     state.shake = 5;
   };

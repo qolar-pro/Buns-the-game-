@@ -1,5 +1,51 @@
 # Survivors Juicy Buns - Change Log
 
+## [Version 0.4.0] - The world (2026-09-17)
+
+Biomes to travel to, villages to spend loot in, bows to fight with, and a second
+ending to choose instead of the first.
+
+### Added
+- **Three surface biomes** beside the meadows — the Dust Flats, the White Waste
+  and the Sunken Fen — each with its own terrain, flora and native mob, and each
+  gating one material the combat tree needs: plant fibre for bows, thick fur for
+  the fur armour set, reeds for arrows in bulk. Biome thresholds were chosen by
+  sweeping every combination against 6,561 sampled chunks, not guessed.
+- **Villages**: a fixed street plan, four residents, roughly one every
+  twenty-five chunks, never in the fen. Barter trade by role, two stable
+  requests per settlement, and a safe haven where nothing hostile spawns.
+- **Sleeping**: a bed at night takes you to dawn, with nothing dangerous within
+  600 units. Beds previously did nothing but break.
+- **Ranged combat**: bows and crossbows firing simulated arrows that travel, can
+  miss, and are mostly recoverable. Bound to the action button, so touch shoots
+  too. The sentinel fights at range now, as it was always meant to.
+- **Armour that works**: four sets with real defence values, weight, and a
+  matched-set bonus. Shields block while held.
+- **A second ending.** The signal core powers the antenna or the village
+  generator, and there is one core. RESCUED, or SETTLED. Neither is the good
+  ending; the summary underneath is identical, because the run was.
+- 77 new art assets (248 total), 21 new recipes (63 total), ~35 new items.
+- `scripts/world-test.mjs`: 24 browser checks over biomes, villages, trade,
+  ranged combat, armour, sleeping and the second ending. Nothing is injected —
+  every check walks the generated world.
+
+### Fixed
+- **Iron ore, copper ore and collapsed shafts never spawned.** They were listed
+  in a random table that no caller reached, so a census of 225 chunks found zero
+  of each: no iron, no dungeon, no ending. The game could not be finished.
+- **Only leather armour protected anybody.** Chainmail, fur and a full titanium
+  suit all gave zero defence, in two separate copies of the same chain.
+- The bed could never be used, only chopped up.
+
+### Changed
+- Art budget raised from 2.50 MB to 3.50 MB. The asset count went from 113 to
+  248; palette quantisation would fit the whole set in 0.9 MB but shifts 3.5% of
+  the character atlas by more than 24/255, which is visible banding on every
+  sprite. Cheaper art is not smaller art. Actual payload: 2.61 MB.
+- `spawnResource` requires a type, so content cannot be added to a dead table
+  again. Armour, biome flora, mob profiles, trade stock, village requests and
+  placement rules are all data tables.
+
 ## [Version 0.3.0] - Content (2026-09-17)
 
 The game now has an arc: stranded, dig, fight, broadcast, rescued. Nothing from

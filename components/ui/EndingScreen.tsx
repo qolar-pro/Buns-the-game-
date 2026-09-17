@@ -13,6 +13,33 @@ import {
   subscribeHud,
 } from '@/src/game/core/HudStore';
 
+/**
+ * The two endings.
+ *
+ * Deliberately not a winner and a consolation prize. One of them ends with you
+ * leaving and one of them ends with you staying, and the summary underneath is
+ * identical, because the run was.
+ */
+const ENDINGS: Record<'rescued' | 'settled', { kicker: string; title: string; body: string }> = {
+  rescued: {
+    kicker: 'Transmission sent',
+    title: 'RESCUED',
+    body:
+      'The antenna holds. Somewhere beyond the treeline the signal is heard, and for '
+      + 'the first time since you woke up here, you are not the only one who knows '
+      + 'where you are. You are going home, and the fen and the waste and the thing '
+      + 'in the Vault will be somebody else\u2019s problem.',
+  },
+  settled: {
+    kicker: 'The generator turns over',
+    title: 'SETTLED',
+    body:
+      'The hall lights come on and stay on. Nobody is coming for you \u2014 you spent '
+      + 'the core on the people who were already here. The antenna stands on the '
+      + 'ridge with nothing in it, and by spring there are forty of you.',
+  },
+};
+
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="flex items-baseline justify-between border-b border-white/10 py-2">
@@ -27,25 +54,22 @@ export function EndingScreen({ onReturn }: { onReturn: () => void }) {
   if (!hud.ending) return null;
 
   const e = hud.ending;
+  const copy = ENDINGS[e.kind];
 
   return (
     <div className="absolute inset-0 z-[90] flex items-center justify-center bg-[#0d1214]/95 p-6 font-mono">
       <div className="w-full max-w-md">
         <p className="mb-2 text-[11px] uppercase tracking-[0.3em] text-[#b2a89a]">
-          Transmission sent
+          {copy.kicker}
         </p>
         <h1
           className="mb-5 text-4xl font-black tracking-tighter text-[#fed859]"
           style={{ textShadow: '3px 3px 0 #1e2629' }}
         >
-          RESCUED
+          {copy.title}
         </h1>
 
-        <p className="mb-6 text-sm leading-relaxed text-white/70">
-          The antenna holds. Somewhere beyond the treeline the signal is heard, and
-          for the first time since you woke up here, you are not the only one who
-          knows where you are.
-        </p>
+        <p className="mb-6 text-sm leading-relaxed text-white/70">{copy.body}</p>
 
         <div className="mb-7">
           <Stat label="Days survived" value={e.daysSurvived} />

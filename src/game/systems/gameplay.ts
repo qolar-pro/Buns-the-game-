@@ -16,6 +16,8 @@ import { updateCreatures } from './animals';
 import { updateSurvival } from './survival';
 import { addFloatingText, updateFloatingTexts } from './feedback';
 import { readNextLog } from './lore';
+import { isLauncher, shoot, updateProjectiles } from './ranged';
+import { countItem } from './inventory';
 import { isPlaceable, placeHeld } from './building';
 import { soundManager } from '../../../lib/SoundManager';
 import { CollisionLayer, SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
@@ -55,6 +57,13 @@ export function createGameplay({
   addToInventory, removeFromInventory, spawnItem, spawnEnemy, spawnChunkResources,
   spawnResource, dropLoot, getResourceDimensions, getAnimalSpriteInfo,
 }: GameplayDeps) {
+  /** Bound once: ranged.ts asks about the pack, and spawns what it drops. */
+  const rangedDeps = {
+    countItem: (type: ItemType) => countItem(state, type),
+    removeFromInventory: (type: ItemType, count: number) => { removeFromInventory(type, count); },
+    spawnItem,
+  };
+
   // Harvest, attack and use live in interaction.ts; update() calls interact()
   // when the action key is pressed.
   const { interact } = createInteraction({
@@ -154,7 +163,9 @@ export function createGameplay({
       }
 
       const SPRINT_SPEED = 10.5;
-      const speed = (isSprinting ? SPRINT_SPEED : PLAYER_SPEED) * dt;
+      // Armour weight, from systems/armour.ts. Multiplied rather than
+      // subtracted, so a heavy suit slows you without pinning you down.
+      const speed = (isSprinting ? SPRINT_SPEED : PLAYER_SPEED) * (player.speedMultiplier ?? 1) * dt;
       const length = Math.sqrt(dx * dx + dy * dy);
       const moveX = (dx / length) * speed;
       const moveY = (dy / length) * speed;
@@ -318,7 +329,18 @@ export function createGameplay({
     if (keys.has('Space')) {
       keys.delete('Space');
       latched.delete('Space');
-      interact();
+      // A bow in hand makes the action button shoot. One button rather than
+      // two: touch has no room for a second, and the game has to play the same
+      // on both.
+      const held = player.inventory[player.selectedSlot];
+      if (held && isLauncher(held.type)) {
+        const result = shoot(state, now, rangedDeps);
+        if (result === 'no-ammo') {
+          state.message = { text: 'Out of arrows', time: Date.now() };
+        }
+      } else {
+        interact();
+      }
     }
 
     // Place the held item. Bound to a key as well as right-click so that touch,
@@ -487,6 +509,7 @@ export function createGameplay({
 
     // Animals and enemies live in src/game/systems/animals.ts.
     updateCreatures(state, dt, now, { spawnEnemy, spawnItem });
+    updateProjectiles(state, dt, rangedDeps);
 
     // Death logic
     if (player.health <= 0) {

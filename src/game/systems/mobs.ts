@@ -16,6 +16,11 @@ export interface MobProfile {
   aggroRange: number;
   /** Surface mobs only come out at night. */
   nocturnal: boolean;
+  /**
+   * Shoots instead of closing. A ranged mob keeps its distance, which is what
+   * makes cover and a bow of your own worth having.
+   */
+  ranged?: { damage: number; speed: number; cooldown: number; keepAway: number };
 }
 
 export const MOBS: Record<EnemyKind, MobProfile> = {
@@ -25,7 +30,12 @@ export const MOBS: Record<EnemyKind, MobProfile> = {
 
   husk: { name: 'Husk', health: 55, damage: 10, speed: 1.4, aggroRange: 360, nocturnal: true },
   crawler: { name: 'Crawler', health: 16, damage: 5, speed: 2.8, aggroRange: 460, nocturnal: false },
-  sentinel: { name: 'Sentinel', health: 45, damage: 10, speed: 1.2, aggroRange: 520, nocturnal: false },
+  // The one mob that fights at range. It was designed that way and shipped as
+  // a slow melee mob, which made it strictly worse than a crawler.
+  sentinel: {
+    name: 'Sentinel', health: 45, damage: 10, speed: 1.2, aggroRange: 520, nocturnal: false,
+    ranged: { damage: 9, speed: 7, cooldown: 1800, keepAway: 260 },
+  },
   warden: { name: 'The Warden', health: 260, damage: 18, speed: 1.5, aggroRange: 700, nocturnal: false },
 
   // Biome natives. Each is out during the day, because a biome you can only

@@ -71,18 +71,24 @@ const errsBefore = errors.length;
 await page.evaluate(() => {
   // Stand next to something gatherable bare-handed, so this tests the button
   // and not the tool requirement — a tree correctly refuses without an axe.
+  // Nearest rather than first: map iteration order is arbitrary, and on some
+  // seeds the first match was far enough away that the button had nothing to
+  // act on, which failed as though touch input were broken.
   const s = window.__buns?.state;
-  if (!s) return;
+  if (!s) return false;
+  let best = null;
+  let bestDist = Infinity;
   for (const [, list] of s.resources) {
     for (const r of list) {
-      if (r.type === 'bush' || r.type === 'branch' || r.type === 'small_rock') {
-        s.player.x = r.x - 50;
-        s.player.y = r.y - 50;
-        return true;
-      }
+      if (r.type !== 'bush' && r.type !== 'branch' && r.type !== 'small_rock') continue;
+      const d = Math.hypot(r.x - s.player.x, r.y - s.player.y);
+      if (d < bestDist) { best = r; bestDist = d; }
     }
   }
-  return false;
+  if (!best) return false;
+  s.player.x = best.x - 50;
+  s.player.y = best.y - 50;
+  return true;
 });
 await wait(600);
 let harvested = 0;

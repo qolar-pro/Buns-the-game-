@@ -185,7 +185,33 @@ function updateEnemies(
       enemy.state = 'idle';
     }
 
-    if (enemy.state === 'chase') {
+    if (enemy.state === 'chase' && profile.ranged) {
+      // Hold the line and shoot. Closing to melee would waste the whole point
+      // of a ranged mob, and backing off entirely would make it unkillable.
+      const { keepAway, cooldown, damage, speed } = profile.ranged;
+      const drift = dist < keepAway ? -1 : dist > keepAway * 1.4 ? 1 : 0;
+      enemy.x += (dx / dist) * enemy.speed * drift * dt;
+      enemy.y += (dy / dist) * enemy.speed * drift * dt;
+      enemy.facing = dx > 0 ? 'right' : 'left';
+
+      if (now - enemy.lastHitTime > cooldown) {
+        enemy.lastHitTime = now;
+        state.projectiles.push({
+          id: `bolt-${now}-${Math.random()}`,
+          x: enemy.x,
+          y: enemy.y - 30,
+          vx: (dx / dist) * speed,
+          vy: (dy / dist) * speed,
+          damage,
+          life: 90,
+          // Bolts are not arrows: they hurt the player and leave nothing to
+          // pick up, so they carry no ammunition type.
+          type: 'iron_arrow',
+          hostile: true,
+        });
+        soundManager.playHit();
+      }
+    } else if (enemy.state === 'chase') {
       enemy.x += (dx / dist) * enemy.speed * dt;
       enemy.y += (dy / dist) * enemy.speed * dt;
       enemy.facing = dx > 0 ? 'right' : 'left';

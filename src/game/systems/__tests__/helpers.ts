@@ -2,9 +2,13 @@ import { INVENTORY_SLOTS } from '../../core/config';
 import type { GameState, InventorySlot } from '../../core/types';
 
 /**
- * Minimal GameState for exercising the pure systems. Only the fields the
- * systems under test read are populated; the cast keeps the fixture small
- * rather than rebuilding the whole engine state for every assertion.
+ * A GameState for exercising the pure systems.
+ *
+ * It started minimal — only the fields the system under test read — and grew a
+ * field at a time as tests hit `undefined`. That is the wrong shape: a fixture
+ * missing `enemies` does not fail honestly, it throws inside the system and
+ * looks like a bug in the code under test. Every collection a system might walk
+ * is present and empty now, and the numbers a system might subtract are zero.
  */
 export function makeState(slots: (InventorySlot | null)[] = []): GameState {
   const inventory: (InventorySlot | null)[] = Array.from(
@@ -12,12 +16,43 @@ export function makeState(slots: (InventorySlot | null)[] = []): GameState {
     (_, i) => slots[i] ?? null,
   );
   return {
-    player: { inventory, equipment: {} },
+    width: 1280,
+    height: 720,
+    camera: { x: 0, y: 0 },
+    player: {
+      x: 0,
+      y: 0,
+      health: 100,
+      hunger: 100,
+      defense: 0,
+      speedMultiplier: 1,
+      facing: 'down',
+      selectedSlot: 0,
+      isSprinting: false,
+      inventory,
+      equipment: { head: null, torso: null, legs: null, feet: null, back: null },
+    },
     isWorkbenchOpen: false,
+    isInventoryOpen: false,
+    openChestId: null,
+    selectedResourceId: null,
+    selectedAnimalId: null,
     resources: new Map(),
+    generatedChunks: new Set(),
+    items: [],
+    animals: [],
+    enemies: [],
+    particles: [],
+    floatingTexts: [],
+    time: 8 * 60,
+    shake: 0,
+    message: null,
+    lastEatTime: 0,
     level: { kind: 'surface' },
     questsDone: [],
     npcs: [],
+    projectiles: [],
+    lastShotAt: 0,
     villagesFound: [],
     talkingToId: null,
     requestsDone: [],
@@ -31,6 +66,8 @@ export function makeState(slots: (InventorySlot | null)[] = []): GameState {
       uniquesTaken: [],
       wardenDefeated: false,
       broadcast: false,
+      endingKind: null,
+      settleArmed: false,
     },
   } as unknown as GameState;
 }

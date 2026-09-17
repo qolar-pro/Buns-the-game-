@@ -173,6 +173,22 @@ export interface Npc {
   village: string;
 }
 
+/** An arrow in flight. */
+export interface Projectile {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  /** Ticks remaining before it falls. */
+  life: number;
+  /** Which ammunition, so the right thing lands on the ground. */
+  type: ItemType;
+  /** Fired by a mob at the player, rather than the other way round. */
+  hostile?: boolean;
+}
+
 export interface DroppedItem {
   id: string;
   x: number;
@@ -245,6 +261,8 @@ export interface GameState {
     health: number;
     hunger: number;
     defense: number;
+    /** Multiplier on PLAYER_SPEED from armour. 1 when unarmoured. */
+    speedMultiplier: number;
     inventory: (InventorySlot | null)[];
     equipment: Equipment;
     selectedSlot: number;
@@ -260,6 +278,10 @@ export interface GameState {
   /** Where the player is. Dungeons are separate, bounded levels. */
   /** People in the loaded world. */
   npcs: Npc[];
+  /** Arrows in flight. */
+  projectiles: Projectile[];
+  /** Timestamp of the last shot, for the launcher cooldown. */
+  lastShotAt: number;
   /** Villages the player has walked into, by id. Drives the safe-haven rules. */
   villagesFound: string[];
   /** Open trade partner, or null. Mirrors openChestId. */
@@ -280,8 +302,18 @@ export interface GameState {
     uniquesTaken: ItemType[];
     /** Set once the Warden is down. */
     wardenDefeated: boolean;
-    /** Set when the broadcast completes; the run is over. */
+    /** Set when the run ends, either way. */
     broadcast: boolean;
+    /**
+     * Which ending the run took, once it has taken one.
+     *
+     * 'rescued' powers the antenna and calls for a ship; 'settled' gives the
+     * core to the village generator instead. There is one core and both need
+     * it, which is the whole choice.
+     */
+    endingKind: 'rescued' | 'settled' | null;
+    /** Armed by the first press on the generator, so the choice cannot misfire. */
+    settleArmed: boolean;
   };
   /** Objectives the player has already completed, by id. */
   questsDone: string[];

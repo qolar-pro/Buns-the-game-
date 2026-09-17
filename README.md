@@ -28,6 +28,7 @@ npm start        # serve the production build
 | `Shift` | Sprint (needs hunger above 6) |
 | `Space` | Interact / harvest / attack |
 | `F` / right-click | Place the held item (walls, floors and doors snap to a grid) |
+| `Space` (holding a bow) | Shoot |
 | `E` | Toggle inventory and crafting |
 | `1`–`9` | Select hotbar slot |
 | `X` | Sit |

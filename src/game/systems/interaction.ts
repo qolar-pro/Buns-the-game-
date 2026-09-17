@@ -56,9 +56,10 @@ export function createInteraction({
     const px = player.x + PLAYER_SIZE / 2;
     const py = player.y + PLAYER_SIZE * 0.85;
 
-    // People first. Otherwise walking up to a villager holding an axe — which
-    // is most of the game — greets them with it.
-    const person = nearestNpc(state);
+    // People come first, but only when nothing else is targeted. A villager
+    // standing next to your bed should not mean you can never sleep in it: an
+    // explicit target — hovered on desktop, nearest on touch — always wins.
+    const person = state.selectedResourceId ? null : nearestNpc(state);
     if (person) {
       state.talkingToId = person.id;
       state.isInventoryOpen = false;
@@ -257,6 +258,30 @@ export function createInteraction({
         return;
       }
 
+      // The village generator. The core the Warden was carrying fits it exactly
+      // as well as it fits the antenna, and there is only one core.
+      if (res.type === 'village_hall' && selectedItem?.type === 'signal_core') {
+        if (!state.progress.settleArmed) {
+          // Armed, not fired. An ending reached by an accidental keypress next
+          // to a building is not a choice.
+          state.progress.settleArmed = true;
+          state.message = {
+            text: 'The hall generator will take the core. It will not go to the antenna. Interact again to commit.',
+            time: Date.now() + 6000,
+          };
+          refreshUI();
+          return;
+        }
+        selectedItem.count -= 1;
+        if (selectedItem.count <= 0) player.inventory[player.selectedSlot] = null;
+        state.progress.broadcast = true;
+        state.progress.endingKind = 'settled';
+        state.message = { text: 'THE LIGHTS COME ON.', time: Date.now() + 8000 };
+        soundManager.playCraft();
+        refreshUI();
+        return;
+      }
+
       if (res.type === 'loot_chest') {
         // Looting is an interaction, not a harvest: one press empties it.
         const depth = state.level.kind === 'dungeon' ? state.level.depth : 1;
@@ -336,6 +361,7 @@ export function createInteraction({
 
         // Stage 3 — broadcast. This ends the run.
         state.progress.broadcast = true;
+        state.progress.endingKind = 'rescued';
         state.message = { text: 'TRANSMISSION SENT. SOMEONE IS COMING.', time: Date.now() + 8000 };
         refreshUI();
         return;

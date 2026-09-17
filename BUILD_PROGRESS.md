@@ -287,6 +287,17 @@ the entity that drops the item appears in the world. The loop test walks 225
 chunks and asserts on a real census now — injecting the thing under test is how
 a test passes on a game nobody can play.
 
+### Found during the world update
+
+17. **Only leather armour protected anybody.** Defence was four `if`s naming the
+    four leather pieces, so chainmail, fur and the twenty-ingot titanium suit
+    all reduced damage by exactly zero. There was a second copy of the same
+    chain governing starvation damage, so starving in full titanium hurt as
+    much as starving naked. Both go through `systems/armour.ts` now.
+18. **The sentinel was designed ranged and shipped melee**, which made it
+    strictly worse than the crawler standing next to it. Mob profiles carry an
+    optional ranged attack now, and it holds its distance and fires.
+
 ## Not done
 
 - **A tree still pops rather than falling and fading**, and there is no
@@ -305,5 +316,10 @@ a test passes on a game nobody can play.
   every room is reachable, but a player who walks into a wall sprite is stopped
   by its collider rather than by the level geometry — which works, and means the
   bounds are cosmetic rather than enforced.
-- **No ranged attack for the Sentinel.** It was designed as a ranged mob; it is
-  currently a slow, long-sighted melee one.
+- **Dungeons do not have biomes.** The surface has four; the three dungeon
+  depths are still one visual theme with different lighting.
+- **Villagers do not react to anything.** They wander, trade and ask for things,
+  but a wolf walking into the square is not their problem, and neither is a
+  player chopping their house down.
+- **Only two endings.** The choice is real, but it is a fork with two arms, not
+  the three the lore could carry.

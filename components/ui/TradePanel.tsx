@@ -131,6 +131,7 @@ export function TradePanel({ state, npc, refreshUI, onClose }: TradePanelProps) 
                     type="button"
                     disabled={!can}
                     onClick={() => doTrade(offer.id)}
+                    aria-label={`Trade ${offer.give.count} ${offer.give.type.replace(/_/g, ' ')} for ${offer.get.count} ${offer.get.type.replace(/_/g, ' ')}`}
                     className={`flex w-full flex-wrap items-center gap-2 rounded border px-3 py-2 text-left ${
                       can
                         ? 'border-[#7c4d23] hover:bg-white/10'
@@ -156,6 +157,7 @@ export function TradePanel({ state, npc, refreshUI, onClose }: TradePanelProps) 
                     type="button"
                     disabled={!can}
                     onClick={() => doHandIn(request.id)}
+                    aria-label={`Hand in ${request.want.count} ${request.want.type.replace(/_/g, ' ')} for ${request.reward.count} ${request.reward.type.replace(/_/g, ' ')}`}
                     className={`w-full rounded border px-3 py-2 text-left ${
                       request.done
                         ? 'border-neutral-800 opacity-40'

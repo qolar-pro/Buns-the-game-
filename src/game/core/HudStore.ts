@@ -36,6 +36,7 @@ export interface HudSnapshot {
   depth: number;
   /** Run summary, shown when the broadcast fires. */
   ending: {
+    kind: 'rescued' | 'settled';
     daysSurvived: number;
     deepestDepth: number;
     mobsDefeated: number;

@@ -177,6 +177,23 @@ export function createRenderer({
              e.y - 100 < state.camera.y + state.height;
     });
 
+    // Arrows, drawn above the world but below the lighting: they are small and
+    // fast, and sorting them with everything else made them vanish behind grass.
+    const drawProjectiles = () => {
+      for (const p of state.projectiles) {
+        const angle = Math.atan2(p.vy, p.vx);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(angle);
+        // A bolt coming at you has to be unmistakable at a glance.
+        ctx.fillStyle = p.hostile ? '#ff5a3c' : p.type === 'iron_arrow' ? '#d8dde8' : '#c9a227';
+        ctx.fillRect(-18, -2, 34, 4);
+        ctx.fillStyle = '#3a3a3a';
+        ctx.fillRect(-20, -4, 8, 8);
+        ctx.restore();
+      }
+    };
+
     // Find targeted resource for interaction/highlighting
     const { player: _player } = state;
     let targetedResource: Resource | null = null;
@@ -405,6 +422,8 @@ export function createRenderer({
     ctx.restore();
 
     // Night lighting lives in src/game/render/LightingRenderer.ts.
+    drawProjectiles();
+
     drawLighting(ctx, state, visibleResources);
 
     // HUD moved to React; publish a snapshot instead of drawing it here.
@@ -434,6 +453,7 @@ export function createRenderer({
       depth: state.level.kind === 'dungeon' ? state.level.depth : 0,
       ending: state.progress.broadcast
         ? {
+            kind: state.progress.endingKind ?? 'rescued',
             daysSurvived: state.progress.daysSurvived,
             deepestDepth: state.progress.deepestDepth,
             mobsDefeated: state.progress.mobsDefeated,
