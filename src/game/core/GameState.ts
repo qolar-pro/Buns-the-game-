@@ -47,6 +47,7 @@ export function createGameState(): GameState {
       deepestDepth: 0,
       mobsDefeated: 0,
       chestsLooted: 0,
+      logsRead: 0,
       itemsCrafted: 0,
       uniquesTaken: [],
       wardenDefeated: false,

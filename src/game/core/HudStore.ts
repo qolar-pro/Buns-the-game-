@@ -26,10 +26,28 @@ export interface HudSnapshot {
   hotbar: ({ type: string; count: number } | null)[];
   timeLabel: string;
   message: string | null;
+  /** The current objective, so the log renders without touching game state. */
+  questTitle: string | null;
+  questHint: string | null;
+  questProgress: { have: number; need: number } | null;
+  questsDone: number;
+  questsTotal: number;
+  /** 0 on the surface, 1-3 underground. Drives the depth readout. */
+  depth: number;
+  /** Run summary, shown when the broadcast fires. */
+  ending: {
+    daysSurvived: number;
+    deepestDepth: number;
+    mobsDefeated: number;
+    chestsLooted: number;
+    itemsCrafted: number;
+  } | null;
 }
 
 const EMPTY: HudSnapshot = {
   health: 100, hunger: 0, maxHunger: 10, canSprint: false, defense: 0,
+  questTitle: null, questHint: null, questProgress: null, questsDone: 0, questsTotal: 0,
+  depth: 0, ending: null,
   selectedSlot: 0, hotbar: [], timeLabel: '00:00', message: null,
 };
 
@@ -44,6 +62,9 @@ function same(a: HudSnapshot, b: HudSnapshot): boolean {
     a.canSprint !== b.canSprint ||
     a.defense !== b.defense || a.selectedSlot !== b.selectedSlot ||
     a.timeLabel !== b.timeLabel || a.message !== b.message ||
+    a.questTitle !== b.questTitle || a.questsDone !== b.questsDone ||
+    a.depth !== b.depth || (a.ending === null) !== (b.ending === null) ||
+    a.questProgress?.have !== b.questProgress?.have ||
     a.hotbar.length !== b.hotbar.length
   ) {
     return false;

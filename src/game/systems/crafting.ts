@@ -33,5 +33,6 @@ export function craftItem(state: GameState, recipeId: string): CraftResult {
     removeFromInventory(state, ing.type, ing.count);
   }
   addToInventory(state, recipe.output, recipe.count);
+  state.progress.itemsCrafted += 1;
   return 'ok';
 }

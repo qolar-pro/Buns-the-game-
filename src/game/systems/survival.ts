@@ -9,6 +9,7 @@ import { PLAYER_SIZE } from '../core/config';
 import { soundManager } from '../../../lib/SoundManager';
 import { nightStrength } from '../render/LightingRenderer';
 import { updateSmelting } from './smelting';
+import { foodValue } from './food';
 import type { GameState, ItemType } from '../core/types';
 
 export interface SurvivalDeps {
@@ -69,8 +70,12 @@ export function updateSurvival(
   // Update Furnaces
   updateSmelting(state, dt);
 
-  // Time progression
-  state.time = (state.time + 0.08 * dt) % 1440;
+  // Time progression. The wrap past midnight is what counts a day, so the
+  // survived count is derived from the clock rather than a separate timer that
+  // could drift away from it.
+  const advanced = state.time + 0.08 * dt;
+  if (advanced >= 1440) state.progress.daysSurvived += 1;
+  state.time = advanced % 1440;
 
   // Hunger decay
   const SPRINT_HUNGER_DECAY = 0.5 / 60; // 1 point every 2 seconds
@@ -82,22 +87,12 @@ export function updateSurvival(
   if (state.isRightMouseDown && now - state.lastEatTime > 1000) {
     const selectedItem = player.inventory[player.selectedSlot];
     if (selectedItem) {
-      const foodItems = ['raw_beef', 'raw_pork', 'mutton', 'raw_chicken', 'egg', 'wheat_seeds'];
-      if (foodItems.includes(selectedItem.type)) {
-        let healthRestore = 5;
-        let hungerRestore = 10;
-        if (selectedItem.type === 'wheat_seeds') {
-          healthRestore = 1;
-          hungerRestore = 2;
-        } else if (selectedItem.type === 'egg') {
-          healthRestore = 2;
-          hungerRestore = 5;
-        }
-      
-        player.health = Math.min(100, player.health + healthRestore);
-        player.hunger = Math.min(100, player.hunger + hungerRestore);
+      const food = foodValue(selectedItem.type);
+      if (food) {
+        player.health = Math.min(100, player.health + food.health);
+        player.hunger = Math.min(100, player.hunger + food.hunger);
         removeFromInventory(selectedItem.type, 1);
-        state.message = { text: `Ate ${selectedItem.type.replace('_', ' ')}`, time: now };
+        state.message = { text: `Ate ${selectedItem.type.replace(/_/g, ' ')}`, time: now };
         state.lastEatTime = now;
         soundManager.playEat();
       

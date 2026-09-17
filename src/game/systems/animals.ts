@@ -5,10 +5,11 @@
  * given state and dt it mutates state and nothing else.
  */
 import { soundManager } from '../../../lib/SoundManager';
-import type { GameState, ItemType } from '../core/types';
+import { MOBS, enemyDrops } from './mobs';
+import type { EnemyKind, GameState, ItemType } from '../core/types';
 
 export interface CreatureDeps {
-  spawnEnemy: (type: 'static' | 'wolf', x: number, y: number, tier?: number) => void;
+  spawnEnemy: (type: EnemyKind, x: number, y: number, tier?: number) => void;
   /** Hens lay eggs on a timer. */
   spawnItem: (type: ItemType, x: number, y: number, count: number) => void;
 }
@@ -25,8 +26,6 @@ export function updateCreatures(
   now: number,
   { spawnEnemy, spawnItem }: CreatureDeps,
 ): void {
-  const { player } = state;
-
   // Update animals
   state.animals.forEach(animal => {
     animal.timer -= 16 * dt;
@@ -99,75 +98,101 @@ export function updateCreatures(
     }
   });
 
-  // Update Enemies
+  updateEnemies(state, dt, now, { spawnEnemy, spawnItem });
+}
+
+/** Surface mobs that can appear after dark, and the earliest hour they do. */
+const NIGHT_SPAWNS: { kind: EnemyKind; from: number }[] = [
+  { kind: 'static', from: 18 },
+  { kind: 'wolf', from: 22 },
+  { kind: 'husk', from: 23 },
+];
+
+/** Light this strong drives a shade off and burns it. */
+const LIGHT_THRESHOLD = 0.5;
+
+function lightAt(state: GameState, x: number, y: number): number {
+  let level = 0;
+  state.resources.forEach((chunk) => {
+    chunk.forEach((res) => {
+      const radius = res.type === 'campfire' ? 250 : res.type === 'torch' ? 150 : res.type === 'brazier' ? 200 : 0;
+      if (radius === 0) return;
+      const dist = Math.hypot(x - res.x, y - res.y);
+      if (dist < radius) level += 1 - dist / radius;
+    });
+  });
+  return level;
+}
+
+/**
+ * Advance hostiles.
+ *
+ * Every kind runs the same chase/wander loop; what differs between them comes
+ * from `MOBS` (aggro range, speed) and from two flags below, so a new mob is a
+ * row in that table rather than another branch in here.
+ */
+function updateEnemies(
+  state: GameState,
+  dt: number,
+  now: number,
+  { spawnEnemy, spawnItem }: CreatureDeps,
+): void {
+  const { player } = state;
   const hour = state.time / 60;
   const isNight = hour >= 18 || hour < 6;
+  const underground = state.level.kind === 'dungeon';
 
-  // Nocturnal Spawning
-  if (isNight && Math.random() < 0.005 * dt) {
-    const spawnDist = 600;
+  // Nocturnal spawning, surface only — the dungeon ships with its population.
+  if (!underground && isNight && Math.random() < 0.005 * dt) {
     const angle = Math.random() * Math.PI * 2;
-    const sx = player.x + Math.cos(angle) * spawnDist;
-    const sy = player.y + Math.sin(angle) * spawnDist;
-  
-    if (hour >= 22 || hour < 4) {
-      spawnEnemy('wolf', sx, sy);
-    } else {
-      const tier = Math.min(5, 1 + Math.floor(Math.random() * (hour > 20 ? 3 : 1)));
-      spawnEnemy('static', sx, sy, tier);
-    }
+    const sx = player.x + Math.cos(angle) * 600;
+    const sy = player.y + Math.sin(angle) * 600;
+    const eligible = NIGHT_SPAWNS.filter((s) => (hour < 6 ? s.from - 24 : s.from) <= hour);
+    const pick = eligible[Math.floor(Math.random() * eligible.length)] ?? NIGHT_SPAWNS[0];
+    const tier = pick.kind === 'static' ? Math.min(5, 1 + Math.floor(Math.random() * (hour > 20 ? 3 : 1))) : 1;
+    spawnEnemy(pick.kind, sx, sy, tier);
   }
 
-  state.enemies.forEach((enemy, index) => {
+  for (let index = state.enemies.length - 1; index >= 0; index -= 1) {
+    const enemy = state.enemies[index];
+    const profile = MOBS[enemy.type];
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = Math.hypot(dx, dy) || 1;
 
-    // Light avoidance for static enemies
-    let lightLevel = 0;
+    // Shades are the only thing light hurts; everything else ignores it.
+    let lit = 0;
     if (enemy.type === 'static') {
-      state.resources.forEach(chunk => {
-        chunk.forEach(res => {
-          if (res.type === 'torch' || res.type === 'campfire') {
-            const rDist = Math.sqrt(Math.pow(enemy.x - res.x, 2) + Math.pow(enemy.y - res.y, 2));
-            const radius = res.type === 'campfire' ? 250 : 150;
-            if (rDist < radius) lightLevel += (1 - rDist / radius);
-          }
-        });
-      });
-    
-      if (lightLevel > 0.5) {
-        enemy.health -= 0.5 * dt; // Light damages static enemies
+      lit = lightAt(state, enemy.x, enemy.y);
+      if (lit > LIGHT_THRESHOLD) {
+        enemy.health -= 0.5 * dt;
         enemy.state = 'idle';
-        enemy.targetX = enemy.x - dx; // Run away from player if player is near light
+        enemy.targetX = enemy.x - dx;
         enemy.targetY = enemy.y - dy;
       }
     }
 
-    if (dist < 500 && lightLevel < 0.5) {
+    const aggro = profile.aggroRange || 500;
+    if (dist < aggro && lit <= LIGHT_THRESHOLD) {
       enemy.state = 'chase';
       enemy.targetX = player.x;
       enemy.targetY = player.y;
-    } else if (enemy.state === 'chase' && dist > 700) {
+    } else if (enemy.state === 'chase' && dist > aggro * 1.4) {
       enemy.state = 'idle';
     }
 
     if (enemy.state === 'chase') {
-      const moveX = (dx / dist) * enemy.speed * dt;
-      const moveY = (dy / dist) * enemy.speed * dt;
-      enemy.x += moveX;
-      enemy.y += moveY;
+      enemy.x += (dx / dist) * enemy.speed * dt;
+      enemy.y += (dy / dist) * enemy.speed * dt;
       enemy.facing = dx > 0 ? 'right' : 'left';
 
       if (dist < 60 && now - enemy.lastHitTime > 1000) {
-        // Attack player
-        const actualDamage = Math.max(1, enemy.damage - player.defense);
-        player.health -= actualDamage;
+        player.health -= Math.max(1, enemy.damage - player.defense);
         enemy.lastHitTime = now;
-        state.shake = 10;
+        state.shake = enemy.type === 'warden' ? 20 : 10;
         soundManager.playHit();
       }
-    } else if (enemy.state === 'idle') {
+    } else {
       enemy.timer -= dt;
       if (enemy.timer <= 0) {
         enemy.targetX = enemy.x + (Math.random() - 0.5) * 200;
@@ -176,7 +201,7 @@ export function updateCreatures(
       }
       const edx = enemy.targetX - enemy.x;
       const edy = enemy.targetY - enemy.y;
-      const eDist = Math.sqrt(edx * edx + edy * edy);
+      const eDist = Math.hypot(edx, edy);
       if (eDist > 5) {
         enemy.x += (edx / eDist) * (enemy.speed * 0.5) * dt;
         enemy.y += (edy / eDist) * (enemy.speed * 0.5) * dt;
@@ -185,10 +210,11 @@ export function updateCreatures(
 
     if (enemy.health <= 0) {
       state.enemies.splice(index, 1);
-      // Drop loot?
-      if (enemy.type === 'wolf') {
-        spawnItem('leather', enemy.x, enemy.y, 1);
+      state.progress.mobsDefeated += 1;
+      for (const drop of enemyDrops(enemy.type)) {
+        spawnItem(drop.type, enemy.x, enemy.y, drop.count);
       }
+      if (enemy.type === 'warden') state.progress.wardenDefeated = true;
     }
-  });
+  }
 }

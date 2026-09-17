@@ -11,12 +11,15 @@
 import { CHUNK_SIZE, MAX_HUNGER, PLAYER_SIZE, PLAYER_SPEED } from '../core/config';
 import { idForEntity } from '../assets/colliders';
 import { createInteraction } from './interaction';
+import { enterDungeon, exitToSurface, nextDepth } from './levels';
 import { updateCreatures } from './animals';
 import { updateSurvival } from './survival';
 import { addFloatingText, updateFloatingTexts } from './feedback';
+import { readNextLog } from './lore';
+import { isPlaceable, placeHeld } from './building';
 import { soundManager } from '../../../lib/SoundManager';
 import { CollisionLayer, SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
-import type { AnimalType, EntityType, GameState, ItemType } from '../core/types';
+import type { AnimalType, EnemyKind, EntityType, GameState, ItemType } from '../core/types';
 
 /** A mutable counter shared with the renderer for sprite animation phase. */
 export interface AnimCounter { value: number }
@@ -33,8 +36,9 @@ export interface GameplayDeps {
   addToInventory: (type: ItemType, count: number) => boolean;
   removeFromInventory: (type: ItemType, count: number) => boolean;
   spawnItem: (type: ItemType, x: number, y: number, count: number) => void;
-  spawnEnemy: (type: 'static' | 'wolf', x: number, y: number, tier?: number) => void;
+  spawnEnemy: (type: EnemyKind, x: number, y: number, tier?: number) => void;
   spawnChunkResources: (cx: number, cy: number) => void;
+  spawnResource: (type: EntityType, x: number, y: number) => boolean;
   dropLoot: (type: AnimalType, x: number, y: number) => void;
   getResourceDimensions: (
     type: EntityType, scale: number, growthStage?: number, rockIndex?: number,
@@ -49,13 +53,37 @@ export interface GameplayDeps {
 export function createGameplay({
   state, keys, latched, colliders, anim, refreshUI, startNewGame,
   addToInventory, removeFromInventory, spawnItem, spawnEnemy, spawnChunkResources,
-  dropLoot, getResourceDimensions, getAnimalSpriteInfo,
+  spawnResource, dropLoot, getResourceDimensions, getAnimalSpriteInfo,
 }: GameplayDeps) {
   // Harvest, attack and use live in interaction.ts; update() calls interact()
   // when the action key is pressed.
   const { interact } = createInteraction({
     state, colliders, refreshUI, spawnItem, dropLoot,
     getResourceDimensions, getAnimalSpriteInfo,
+    // Level transitions. Going down from the surface always starts at depth 1;
+    // stairs inside a dungeon step one level at a time.
+    onEnterDungeon: (depth) => {
+      if (enterDungeon(state, depth)) {
+        soundManager.playPlace();
+        state.message = { text: `Descended — depth ${depth}`, time: Date.now() };
+        refreshUI();
+      }
+    },
+    onDescend: () => {
+      const next = nextDepth(state);
+      if (next && enterDungeon(state, next)) {
+        state.message = { text: `Descended — depth ${next}`, time: Date.now() };
+        refreshUI();
+      } else {
+        state.message = { text: 'This is the bottom.', time: Date.now() };
+      }
+    },
+    onAscend: () => {
+      if (exitToSurface(state)) {
+        state.message = { text: 'Back on the surface', time: Date.now() };
+        refreshUI();
+      }
+    },
   });
 
   const update = (dt: number) => {
@@ -293,6 +321,24 @@ export function createGameplay({
       interact();
     }
 
+    // Place the held item. Bound to a key as well as right-click so that touch,
+    // which has no second button, can build too.
+    if (keys.has('KeyF')) {
+      keys.delete('KeyF');
+      latched.delete('KeyF');
+      const held = player.inventory[player.selectedSlot];
+      const placed = placeHeld(state, {
+        getResourceDimensions,
+        spawnResource,
+        removeFromInventory,
+        onPlaced: () => soundManager.playPlace(),
+      });
+      if (placed) refreshUI();
+      else if (held && !isPlaceable(held.type)) {
+        state.message = { text: `Can't place ${held.type.replace(/_/g, ' ')}`, time: Date.now() };
+      }
+    }
+
     if (keys.has('KeyR')) {
       keys.delete('KeyR');
       latched.delete('KeyR');
@@ -380,8 +426,19 @@ export function createGameplay({
       chunkResources.forEach(res => {
         if (res.opacity < 1) res.opacity += 0.02 * dt;
 
-        // Growth logic
-        if ((res.type === 'sapling' || res.type === 'tree') && res.growthStage !== undefined && res.growthStage < 2) {
+        // Growth logic. Crops ride the same timer as saplings but keep their
+        // own type through every stage — only the sprite changes.
+        if (res.type === 'wheat_crop' && res.growthStage !== undefined && res.growthStage < 2) {
+          res.growthTimer = (res.growthTimer || 0) + 1 * dt;
+          if (res.growthTimer > 900 + Math.random() * 900) {
+            const oldDims = getResourceDimensions(res.type, res.scale, res.growthStage, res.rockIndex);
+            res.growthStage++;
+            const newDims = getResourceDimensions(res.type, res.scale, res.growthStage, res.rockIndex);
+            res.x -= (newDims.w - oldDims.w) / 2;
+            res.y -= newDims.h - oldDims.h;
+            res.growthTimer = 0;
+          }
+        } else if ((res.type === 'sapling' || res.type === 'tree') && res.growthStage !== undefined && res.growthStage < 2) {
           res.growthTimer = (res.growthTimer || 0) + 1 * dt;
           // Grow every ~20-40 seconds
           const growthThreshold = 1200 + Math.random() * 1200;
@@ -413,6 +470,13 @@ export function createGameplay({
         if (addToInventory(item.type, 1)) {
           soundManager.playPickup();
           addFloatingText(state, item.x, item.y, item.type, 1);
+          // A log is read the moment it is picked up: asking the player to find
+          // a "read" verb for one item would be a worse game than just telling
+          // them what it says.
+          if (item.type === 'survivors_log') {
+            const entry = readNextLog(state);
+            if (entry) state.message = { text: entry, time: Date.now() + 6000 };
+          }
           return false;
         }
       }

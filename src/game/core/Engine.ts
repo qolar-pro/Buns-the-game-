@@ -15,7 +15,7 @@ import { reseedNoise } from '../world/noise';
 import { assets } from '../assets/AssetRegistry';
 import { buildColliders, idForEntity } from '../assets/colliders';
 import { metaFor } from '../assets/manifest';
-import { renderChunkTerrain as drawChunkTerrain, type TerrainTiles } from '../render/TerrainRenderer';
+import { renderChunkTerrain as drawChunkTerrain, renderDungeonTerrain as drawDungeonTerrain, type TerrainTiles } from '../render/TerrainRenderer';
 import { createWorldgen } from '../world/worldgen';
 import { createEntityRenderer } from '../render/EntityRenderer';
 import { createRenderer, type SpriteSet } from '../render/Renderer';
@@ -68,9 +68,13 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
   const chunkCanvases = new Map<string, HTMLCanvasElement>();
   let view = { zoom: 1, dpr: 1 };
   const debugColliders = { current: false };
-  const terrainTiles: TerrainTiles = { grass: null, grassVariant: null, dirt: null };
+  const terrainTiles: TerrainTiles = { grass: null, grassVariant: null, dirt: null, stone: null };
   const animalSprites: Record<string, Sprite | null> = {
     cow: null, pig: null, sheep: null, chicken: null,
+  };
+  /** Mob sheets. Shades and wolves have no art and stay hand-drawn. */
+  const mobSprites: Record<string, Sprite | null> = {
+    husk: null, crawler: null, sentinel: null, warden: null,
   };
   const spriteSet: SpriteSet = {
     tree: null, smallTree: null, sapling: null, trunk: null, bush: null,
@@ -121,10 +125,17 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
           sheep: s('characters/sheep'),
           chicken: s('characters/chicken'),
         });
+        Object.assign(mobSprites, {
+          husk: s('characters/husk'),
+          crawler: s('characters/crawler'),
+          sentinel: s('characters/sentinel'),
+          warden: s('characters/warden'),
+        });
         Object.assign(terrainTiles, {
           grass: s('terrain/grass'),
           grassVariant: s('terrain/grass_variant'),
           dirt: s('terrain/dirt'),
+          stone: s('terrain/stone_floor'),
         });
       };
 
@@ -218,9 +229,15 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
           spawnResource, dropLoot, spawnChunkResources, spawnItem, spawnEnemy,
         } = createWorldgen({ state, getResourceDimensions });
 
+        // Cached per level as well as per chunk: chunk (0,0) of depth 2 is not
+        // chunk (0,0) of the surface, and reusing one for the other was the
+        // obvious way to end up standing on grass underground.
         const renderChunkTerrain = (cx: number, cy: number) => {
-          const canvas = drawChunkTerrain(cx, cy, terrainTiles);
-          if (canvas) chunkCanvases.set(`${cx},${cy}`, canvas);
+          const level = state.level.kind === 'dungeon' ? state.level.depth : 0;
+          const canvas = level === 0
+            ? drawChunkTerrain(cx, cy, terrainTiles)
+            : drawDungeonTerrain(cx, cy, terrainTiles, level);
+          if (canvas) chunkCanvases.set(`${level}:${cx},${cy}`, canvas);
           return canvas;
         };
 
@@ -327,6 +344,12 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
             pig: () => animalSprites.pig,
             sheep: () => animalSprites.sheep,
             chicken: () => animalSprites.chicken,
+            mobs: {
+              husk: () => mobSprites.husk,
+              crawler: () => mobSprites.crawler,
+              sentinel: () => mobSprites.sentinel,
+              warden: () => mobSprites.warden,
+            },
           },
         });
 
@@ -344,6 +367,7 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
           spawnItem,
           spawnEnemy,
           spawnChunkResources,
+          spawnResource,
           dropLoot,
           getResourceDimensions,
           getAnimalSpriteInfo,

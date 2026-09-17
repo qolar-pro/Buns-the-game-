@@ -122,6 +122,12 @@ export function TouchControls({ keys, latched, selectNearestTarget, onOpenInvent
     latched.add('Space');
   };
 
+  /** Place the held item — the touch equivalent of right-click. */
+  const doPlace = () => {
+    keys.add('KeyF');
+    latched.add('KeyF');
+  };
+
   const buttonStyle =
     'flex items-center justify-center rounded-full border-2 border-[#7c4d23] bg-black/55 font-mono text-white active:bg-white/20 select-none';
 
@@ -150,6 +156,14 @@ export function TouchControls({ keys, latched, selectNearestTarget, onOpenInvent
         <div className="flex gap-3">
           <button type="button" onClick={onOpenInventory} aria-label="Open inventory" className={`${buttonStyle} h-14 w-14 text-xs`}>
             BAG
+          </button>
+          <button
+            type="button"
+            onPointerDown={doPlace}
+            aria-label="Place held item"
+            className={`${buttonStyle} h-14 w-14 text-xs`}
+          >
+            PUT
           </button>
           <button
             type="button"

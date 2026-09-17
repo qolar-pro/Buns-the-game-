@@ -14,6 +14,7 @@ import { drawFloatingTexts } from '../systems/feedback';
 import { drawWorldObject, isWorldObject } from './PropRenderer';
 import { FRAMES } from '../assets/frames';
 import { publishHud, toHotbar } from '../core/HudStore';
+import { evaluateQuests } from '../systems/quests';
 import { HOTBAR_SLOTS, MAX_HUNGER } from '../core/config';
 import type { ColliderShape } from '../../../lib/SpriteCollider';
 import type {
@@ -105,10 +106,13 @@ export function createRenderer({
     const startCY = Math.floor(state.camera.y / CHUNK_SIZE);
     const endCY = Math.ceil((state.camera.y + state.height) / CHUNK_SIZE);
 
+    // Ground canvases are cached per level as well as per chunk, so the same
+    // chunk coordinates underground and on the surface don't collide.
+    const levelKey = state.level.kind === 'dungeon' ? state.level.depth : 0;
+
     for (let cx = startCX; cx < endCX; cx++) {
       for (let cy = startCY; cy < endCY; cy++) {
-        const chunkId = `${cx},${cy}`;
-        let chunkCanvas = chunkCanvases.get(chunkId);
+        let chunkCanvas = chunkCanvases.get(`${levelKey}:${cx},${cy}`);
         if (!chunkCanvas) {
           chunkCanvas = renderChunkTerrain(cx, cy) || undefined;
         }
@@ -402,6 +406,28 @@ export function createRenderer({
       hotbar: toHotbar(state.player.inventory, HOTBAR_SLOTS),
       timeLabel: `${Math.floor(state.time / 60).toString().padStart(2, '0')}:${Math.floor(state.time % 60).toString().padStart(2, '0')}`,
       message: state.message && Date.now() - state.message.time < 2000 ? state.message.text : null,
+      // Objectives are recomputed here rather than in the tick: the HUD store
+      // only notifies subscribers on a real change, so this stays cheap.
+      ...(() => {
+        const view = evaluateQuests(state);
+        return {
+          questTitle: view.active?.title ?? null,
+          questHint: view.active?.hint ?? null,
+          questProgress: view.activeProgress,
+          questsDone: view.completed.length,
+          questsTotal: view.total,
+        };
+      })(),
+      depth: state.level.kind === 'dungeon' ? state.level.depth : 0,
+      ending: state.progress.broadcast
+        ? {
+            daysSurvived: state.progress.daysSurvived,
+            deepestDepth: state.progress.deepestDepth,
+            mobsDefeated: state.progress.mobsDefeated,
+            chestsLooted: state.progress.chestsLooted,
+            itemsCrafted: state.progress.itemsCrafted,
+          }
+        : null,
     });
   };
 

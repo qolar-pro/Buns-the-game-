@@ -15,6 +15,19 @@ export function makeState(slots: (InventorySlot | null)[] = []): GameState {
     player: { inventory, equipment: {} },
     isWorkbenchOpen: false,
     resources: new Map(),
+    level: { kind: 'surface' },
+    questsDone: [],
+    progress: {
+      daysSurvived: 0,
+      deepestDepth: 0,
+      mobsDefeated: 0,
+      chestsLooted: 0,
+      logsRead: 0,
+      itemsCrafted: 0,
+      uniquesTaken: [],
+      wardenDefeated: false,
+      broadcast: false,
+    },
   } as unknown as GameState;
 }
 

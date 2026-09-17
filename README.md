@@ -27,6 +27,7 @@ npm start        # serve the production build
 | `W` `A` `S` `D` | Move |
 | `Shift` | Sprint (needs hunger above 6) |
 | `Space` | Interact / harvest / attack |
+| `F` / right-click | Place the held item (walls, floors and doors snap to a grid) |
 | `E` | Toggle inventory and crafting |
 | `1`–`9` | Select hotbar slot |
 | `X` | Sit |
@@ -34,7 +35,7 @@ npm start        # serve the production build
 | `N` | New game |
 | `Esc` | Pause menu (save, settings, return to main menu) |
 
-On a touch device the game swaps to a virtual stick, a context action button and
+On a touch device the game swaps to a virtual stick, USE/PUT/BAG/RUN buttons and
 full-screen inventory sheets. Portrait orientation shows a rotate prompt.
 
 ## Project structure

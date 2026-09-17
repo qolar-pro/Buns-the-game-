@@ -79,6 +79,24 @@ export const META: Record<string, AssetMeta> = {
   'world/coal_ore': solid(110, 110, 36, 17),
   'world/iron_ore': solid(110, 110, 36, 17),
 
+  // --- content update ------------------------------------------------------
+  'world/copper_ore': solid(110, 110, 36, 17),
+  'world/titanium_ore': solid(110, 110, 36, 17),
+  'world/rubble': solid(120, 120, 46, 22),
+  'world/dungeon_entrance': solid(150, 150, 52, 24),
+  'world/dungeon_exit': solid(100, 130, 22, 11),
+  'world/stairs_down': solid(120, 120, 40, 18),
+  'world/loot_chest': solid(110, 120, 34, 14),
+  'world/brazier': solid(80, 120, 18, 9),
+  'world/wall': solid(128, 150, 62, 26),
+  'world/floor': { anchor: { x: 0.5, y: 1 }, worldSize: { w: 128, h: 128 }, collider: { kind: 'none' }, layer: 'NONE' },
+  'world/door': solid(110, 150, 52, 20),
+  'world/anvil': solid(110, 110, 38, 16),
+  // Crops are walked through, not around.
+  'world/crop_seedling': pickup(55, 55, 10, 5),
+  'world/crop_growing': pickup(86, 86, 18, 9),
+  'world/crop_wheat': pickup(100, 100, 22, 11),
+
   // --- gatherable, walk-through --------------------------------------------
   'world/bush': pickup(105, 105, 28, 13),
   'world/rock_a': pickup(92, 92, 26, 12),

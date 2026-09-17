@@ -10,7 +10,9 @@
  */
 import { CHUNK_SIZE } from '../core/config';
 import { fbm, hash } from './noise';
-import type { AnimalType, EntityType, GameState, ItemType } from '../core/types';
+import { MOBS } from '../systems/mobs';
+import { hitsToBreak } from '../systems/harvesting';
+import type { AnimalType, EnemyKind, EntityType, GameState, ItemType } from '../core/types';
 
 /** Draw dimensions for an entity, supplied by the renderer. */
 export type DimensionFn = (
@@ -46,9 +48,17 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
       const rand = random();
       if (rand < 0.12) {
         type = 'rock';
-      } else if (rand < 0.18) {
+      } else if (rand < 0.17) {
         type = 'coal_ore';
-      } else if (rand < 0.28) {
+      } else if (rand < 0.205) {
+        type = 'copper_ore';
+      } else if (rand < 0.225) {
+        type = 'iron_ore';
+      } else if (rand < 0.232) {
+        // Collapsed shafts: rare, and the only way underground. Sealed with
+        // rubble, so they are useless until the player has iron.
+        type = 'dungeon_entrance';
+      } else if (rand < 0.30) {
         type = 'sapling';
         growthStage = 0;
       } else if (rand < 0.38) {
@@ -131,7 +141,7 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
       y,
       type,
       hits: 0,
-      maxHits: (type === 'rock' || type === 'trunk' || type === 'coal_ore') ? 3 : (type === 'bush' ? 2 : (type === 'torch' || type === 'workbench' || type === 'campfire' || type === 'branch' || type === 'small_rock' || type === 'grass' || type === 'chest' || type === 'furnace' ? 1 : (growthStage + 1) * 3)),
+      maxHits: hitsToBreak(type, growthStage),
       scale,
       opacity: forceType ? 1 : 0,
       rockIndex,
@@ -295,28 +305,28 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
     }
   };
 
-  const spawnEnemy = (type: 'static' | 'wolf', x: number, y: number, tier: number = 1) => {
-    const id = `enemy-${Date.now()}-${Math.random()}`;
-    const health = type === 'wolf' ? 100 : 50 * tier;
-    const damage = type === 'wolf' ? 15 : 5 * tier;
-    const speed = type === 'wolf' ? 3.5 : 2.0;
+  const spawnEnemy = (type: EnemyKind, x: number, y: number, tier: number = 1) => {
+    const profile = MOBS[type];
+    // Shades scale with the hour via `tier`; everything else uses its profile.
+    const health = type === 'static' ? profile.health * tier : profile.health;
+    const damage = type === 'static' ? profile.damage * tier : profile.damage;
 
     state.enemies.push({
-      id,
+      id: `enemy-${Date.now()}-${Math.random()}`,
       type,
       x,
       y,
       health,
       maxHealth: health,
       damage,
-      speed,
+      speed: profile.speed,
       targetX: x,
       targetY: y,
       state: 'idle',
       timer: 0,
       facing: 'left',
       lastHitTime: 0,
-      tier
+      tier,
     });
   };
 

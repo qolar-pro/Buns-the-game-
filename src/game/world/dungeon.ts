@@ -11,7 +11,8 @@
  * stairs-down always be reachable.
  */
 import { CHUNK_SIZE } from '../core/config';
-import type { Animal, Enemy, EntityType, Resource } from '../core/types';
+import { MOBS } from '../systems/mobs';
+import type { Animal, Enemy, EnemyKind, EntityType, Resource } from '../core/types';
 import type { Depth } from '../systems/loot';
 
 /** Cell size in world units. Two cells fit a chunk, so rooms align to terrain. */
@@ -67,16 +68,49 @@ function makeResource(type: EntityType, cx: number, cy: number, extra: Partial<R
   } as Resource;
 }
 
-/** Hostiles per depth, and how many. */
-const SPAWNS: Record<Depth, { kind: Enemy['type']; count: number; health: number; damage: number; speed: number }[]> = {
-  1: [{ kind: 'crawler' as Enemy['type'], count: 6, health: 14, damage: 4, speed: 2.6 }],
+/**
+ * Build one hostile from its profile.
+ *
+ * `scale` multiplies health and damage only — a deeper crawler hits harder but
+ * does not outrun the player, which would make depth 3 unfair rather than hard.
+ */
+function makeEnemy(id: string, kind: EnemyKind, x: number, y: number, scale: number): Enemy {
+  const profile = MOBS[kind];
+  const health = Math.round(profile.health * scale);
+  return {
+    id,
+    type: kind,
+    x,
+    y,
+    health,
+    maxHealth: health,
+    speed: profile.speed,
+    damage: Math.round(profile.damage * scale),
+    targetX: x,
+    targetY: y,
+    state: 'idle',
+    timer: 0,
+    facing: 'left',
+    lastHitTime: 0,
+  };
+}
+
+/**
+ * Who lives on each floor, and how much tougher than the base profile.
+ *
+ * Only kind/count/scale live here — health, damage and speed come from `MOBS`
+ * so a mob is balanced in exactly one place.
+ */
+const SPAWNS: Record<Depth, { kind: EnemyKind; count: number; scale: number }[]> = {
+  1: [{ kind: 'crawler', count: 6, scale: 0.9 }],
   2: [
-    { kind: 'crawler' as Enemy['type'], count: 7, health: 16, damage: 5, speed: 2.8 },
-    { kind: 'sentinel' as Enemy['type'], count: 3, health: 40, damage: 9, speed: 1.1 },
+    { kind: 'crawler', count: 7, scale: 1 },
+    { kind: 'sentinel', count: 3, scale: 0.9 },
   ],
   3: [
-    { kind: 'crawler' as Enemy['type'], count: 6, health: 18, damage: 6, speed: 3.0 },
-    { kind: 'sentinel' as Enemy['type'], count: 5, health: 48, damage: 11, speed: 1.2 },
+    { kind: 'crawler', count: 6, scale: 1.15 },
+    { kind: 'sentinel', count: 5, scale: 1.1 },
+    { kind: 'husk', count: 3, scale: 1 },
   ],
 };
 
@@ -190,43 +224,15 @@ export function generateDungeon(depth: Depth, seed: number): DungeonLevel {
       const dist = Math.abs(cell.x - spawnCell.x) + Math.abs(cell.y - spawnCell.y);
       if (dist < 3) continue; // never right on top of the player
       enemyId += 1;
-      enemies.push({
-        id: `dun-e-${depth}-${enemyId}`,
-        type: group.kind,
-        x: cell.x * CELL + CELL / 2,
-        y: cell.y * CELL + CELL / 2,
-        health: group.health,
-        maxHealth: group.health,
-        speed: group.speed,
-        damage: group.damage,
-        targetX: cell.x * CELL,
-        targetY: cell.y * CELL,
-        state: 'idle',
-        timer: 0,
-        facing: 'left',
-        lastHitTime: 0,
-      });
+      enemies.push(
+        makeEnemy(`dun-e-${depth}-${enemyId}`, group.kind, cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2, group.scale),
+      );
     }
   }
 
   // The Warden guards the bottom.
   if (depth === 3) {
-    enemies.push({
-      id: 'warden',
-      type: 'warden' as Enemy['type'],
-      x: last.cx * CELL + CELL / 2,
-      y: last.cy * CELL + CELL / 2,
-      health: 260,
-      maxHealth: 260,
-      speed: 1.5,
-      damage: 18,
-      targetX: last.cx * CELL,
-      targetY: last.cy * CELL,
-      state: 'idle',
-      timer: 0,
-      facing: 'left',
-      lastHitTime: 0,
-    });
+    enemies.push(makeEnemy('warden', 'warden', last.cx * CELL + CELL / 2, last.cy * CELL + CELL / 2, 1));
   }
 
   return {

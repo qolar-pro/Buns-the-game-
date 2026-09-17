@@ -11,7 +11,7 @@ export type EntityType =
   | 'coal_ore' | 'iron_ore' | 'copper_ore' | 'titanium_ore'
   // placeables
   | 'torch' | 'workbench' | 'campfire' | 'bed' | 'chest' | 'furnace' | 'antenna' | 'fence'
-  | 'wall' | 'floor' | 'door' | 'anvil'
+  | 'wall' | 'floor' | 'door' | 'anvil' | 'wheat_crop'
   // dungeon
   | 'dungeon_entrance' | 'dungeon_exit' | 'stairs_down' | 'rubble' | 'loot_chest' | 'brazier';
 export type ItemType =
@@ -96,6 +96,8 @@ export interface Resource {
   maxFuelTimer?: number;
   growthTimer?: number;
   antennaProgress?: number; // 0 to 100
+  /** Set once the Warden's signal core is fitted; the last step before broadcast. */
+  coreInstalled?: boolean;
 }
 
 export interface Enemy {
@@ -207,6 +209,8 @@ export interface GameState {
     deepestDepth: number;
     mobsDefeated: number;
     chestsLooted: number;
+    /** How many survivor's logs have been read, so they stay in order. */
+    logsRead: number;
     itemsCrafted: number;
     /** Uniques already claimed, so a second lantern never drops. */
     uniquesTaken: ItemType[];

@@ -78,8 +78,12 @@ it but never guaranteed.
 | Wolf | surface at night | chases, fast, hits hard |
 | Husk | surface at night | slow, tanky, drops scrap |
 | Crawler | dungeons | fast, weak, swarms |
-| Sentinel | deep dungeons | slow, armoured, ranged |
+| Sentinel | deep dungeons | slow, armoured, long sight |
 | **The Warden** | the Vault | boss; drops the signal core |
+
+Stats live in one table (`systems/mobs.ts`) and the dungeon scales them by
+depth; nothing about a mob is written down twice. Shades are the only thing
+light hurts, which is what makes a torch a weapon as well as a lamp.
 
 ## The ending
 
@@ -90,6 +94,31 @@ it but never guaranteed.
 
 Broadcasting ends the run and shows a summary: days survived, depth reached,
 things crafted, mobs defeated.
+
+## Farming
+
+Wheat seeds come off grass, plant into a crop, and ripen over about a minute of
+play into wheat. Wheat is bread and meat pies, which are the best food in the
+game. Pulled up early a crop returns only its seed, so the cost of impatience is
+the wait itself rather than a lost plant.
+
+## Food
+
+Raw meat is edible and nearly worthless; cooking roughly doubles what it
+restores and makes it heal; prepared food is better again. That gradient is the
+only reason to spend fuel on anything but ore.
+
+## Building
+
+Walls, floors and doors snap to a 128-unit grid so a row of them is actually a
+wall. Props — torches, workbenches, beds, furnaces, the anvil — are placed
+freely. Anything placed can be broken back into the item that made it.
+
+## The survivor's logs
+
+Six fragments, found in chests, that say who was here before and why the Vault
+is sealed. They are read on pickup and reveal in order. Nothing gates on them:
+they are the reason a chest holding "just a log" is still worth opening.
 
 ## Quest log
 

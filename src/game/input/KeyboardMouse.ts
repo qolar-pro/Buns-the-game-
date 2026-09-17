@@ -8,6 +8,7 @@ import { SpriteColliderGenerator, type ColliderShape, type Point } from '../../.
 import { soundManager } from '../../../lib/SoundManager';
 import { CHUNK_SIZE, PLAYER_SIZE } from '../core/config';
 import { idForEntity } from '../assets/colliders';
+import { placeHeld } from '../systems/building';
 import type { AnimalType, EntityType, GameState, ItemType, Resource } from '../core/types';
 
 export interface InputDeps {
@@ -44,7 +45,7 @@ export interface InputDeps {
  * rewritten around a new argument shape.
  */
 /** Keys the update tick consumes once per press rather than reading as held. */
-const LATCHED_KEYS = new Set(['Space', 'KeyE', 'KeyR', 'KeyN']);
+const LATCHED_KEYS = new Set(['Space', 'KeyE', 'KeyR', 'KeyN', 'KeyF']);
 
 export function createInputHandlers({
   state, keys, latched, colliders, canvas, refreshUI,
@@ -265,31 +266,14 @@ export function createInputHandlers({
         }
       }
 
-      // Right click placement - Now places in front of player
+      // Right click placement - places in front of the player.
       if (!state.isInventoryOpen) {
-        const { player } = state;
-        const selectedItem = player.inventory[player.selectedSlot];
-        if (selectedItem && (selectedItem.type === 'torch' || selectedItem.type === 'workbench' || selectedItem.type === 'campfire' || selectedItem.type === 'sapling' || selectedItem.type === 'bed' || selectedItem.type === 'chest' || selectedItem.type === 'furnace')) {
-          // Calculate position in front of player
-          const offset = 130; // Increased offset to be clearly in front of the 128px player
-          let targetX = player.x + PLAYER_SIZE / 2;
-          let targetY = player.y + PLAYER_SIZE / 2;
-
-          if (player.facing === 'up') targetY -= offset;
-          else if (player.facing === 'down') targetY += offset;
-          else if (player.facing === 'left') targetX -= offset;
-          else if (player.facing === 'right') targetX += offset;
-        
-          // Center the item on the target position
-          const dims = getResourceDimensions(selectedItem.type as EntityType, 1, selectedItem.type === 'sapling' ? 0 : 2);
-          const placeX = targetX - dims.w / 2;
-          const placeY = targetY - dims.h / 2;
-
-          if (spawnResource(selectedItem.type as EntityType, placeX, placeY)) {
-            removeFromInventory(selectedItem.type, 1);
-            soundManager.playPlace();
-          }
-        }
+        placeHeld(state, {
+          getResourceDimensions,
+          spawnResource,
+          removeFromInventory,
+          onPlaced: () => soundManager.playPlace(),
+        });
       }
     }
   };

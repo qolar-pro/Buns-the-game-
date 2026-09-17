@@ -245,6 +245,33 @@ made it visible.
     ESLint 9 flat config, so both configs were dead; `ignoreDuringBuilds: true`
     hid it.
 
+### Found during the content update
+
+11. **Scrap metal had no source.** It was the only input to copper wiring, which
+    is what the antenna needs, which is how the game ends — so the ending was
+    unreachable. It is dungeon salvage now, with a copper-ingot route as a
+    second path.
+12. **Cooked food was inedible.** The eat check listed six raw ingredients by
+    name and nothing the furnace produced, so cooking meat turned it into an
+    item that could not be eaten. Food is a table now (`systems/food.ts`), and
+    cooked beats raw beats nothing.
+13. **Wheat had no source.** It had an icon and two recipes and nothing in the
+    world grew it, so bread and meat pies were uncraftable. Seeds plant into a
+    crop that ripens.
+14. **Tier 4 and 5 weapons hit like a bare hand.** Combat damage was a chain
+    listing three swords by name; `titanium_sword` and `relic_blade` fell
+    through to the default 2. With 260 health, the Warden could not be killed
+    with the best weapon in the game. Damage comes from the tier table now.
+15. **Clearing a shaft deleted it.** Breaking the rubble on a `dungeon_entrance`
+    fell through to the generic "remove resource" path, so the entrance vanished
+    on the hit that opened it and the dungeon could never be entered. A cleared
+    shaft stays as a doorway.
+
+The last four were found by `scripts/loop-test.mjs`, which walks the whole
+progression in a browser — surface to shaft to Warden to broadcast — and by
+`reachability.test.ts`, which proves every recipe ingredient can actually be
+obtained. Both exist because bug 11 was the third of its kind.
+
 ## Not done
 
 - **A tree still pops rather than falling and fading**, and there is no
@@ -259,3 +286,9 @@ made it visible.
 - **The 25-step manual checklist has not been run end to end by a human.** The
   automated suites cover 22 of the 25 steps; the three they do not are noted in
   `TEST_CHECKLIST.md`.
+- **Dungeon walls are drawn, not collided against.** The level is bounded and
+  every room is reachable, but a player who walks into a wall sprite is stopped
+  by its collider rather than by the level geometry — which works, and means the
+  bounds are cosmetic rather than enforced.
+- **No ranged attack for the Sentinel.** It was designed as a ranged mob; it is
+  currently a slow, long-sighted melee one.

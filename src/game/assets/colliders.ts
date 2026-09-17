@@ -102,6 +102,11 @@ export function idForEntity(
       return 'world/trunk';
     case 'sapling':
       return 'world/sapling';
+    case 'wheat_crop':
+      // Three stages of one crop rather than three entities, so the growth
+      // tick that already advances saplings handles it unchanged.
+      if ((opts.growthStage ?? 0) === 0) return 'world/crop_seedling';
+      return opts.growthStage === 1 ? 'world/crop_growing' : 'world/crop_wheat';
     case 'bush':
       return 'world/bush';
     case 'torch':
@@ -116,6 +121,30 @@ export function idForEntity(
       return opts.lit ? 'world/furnace_lit' : 'world/furnace';
     case 'bed':
       return 'world/bed';
+    case 'copper_ore':
+      return 'world/copper_ore';
+    case 'titanium_ore':
+      return 'world/titanium_ore';
+    case 'rubble':
+      return 'world/rubble';
+    case 'dungeon_entrance':
+      return 'world/dungeon_entrance';
+    case 'dungeon_exit':
+      return 'world/dungeon_exit';
+    case 'stairs_down':
+      return 'world/stairs_down';
+    case 'loot_chest':
+      return 'world/loot_chest';
+    case 'brazier':
+      return 'world/brazier';
+    case 'wall':
+      return 'world/wall';
+    case 'floor':
+      return 'world/floor';
+    case 'door':
+      return 'world/door';
+    case 'anvil':
+      return 'world/anvil';
     case 'antenna':
       return 'world/antenna';
     case 'fence':

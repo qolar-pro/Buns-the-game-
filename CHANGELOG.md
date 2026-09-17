@@ -1,5 +1,59 @@
 # Survivors Juicy Buns - Change Log
 
+## [Version 0.3.0] - Content (2026-09-17)
+
+The game now has an arc: stranded, dig, fight, broadcast, rescued. Nothing from
+v0.2.0 was removed.
+
+### Added
+- **An ending.** Craft the antenna frame, restore it with copper wiring, install
+  the signal core taken from the Warden, and broadcast. A summary screen closes
+  the run with days survived, depth reached, chests looted and mobs defeated.
+- **A quest log**: 13 ordered objectives that always name the next concrete
+  action, derived from game state rather than handed in, and sticky so spending
+  an item never un-completes a step.
+- **Dungeons**: three hand-bounded levels of rooms and corridors, generated from
+  the world seed, with chests, ore in the walls, braziers, stairs down and a way
+  out. Rooms are joined in sequence, so a level can never strand a room.
+- **Loot**: weighted per-depth chest tables with four uniques — the lantern, the
+  prospector's pick, the relic blade and the Warden's key — each of which can
+  only be found once per run.
+- **Four mobs**: husk, crawler, sentinel and the Warden, all driven by one
+  profile table and drawn from generated sprite sheets.
+- **Two ores**: copper and titanium, with ingots, wiring and a titanium tool
+  tier behind an anvil.
+- **Building**: walls, floors and doors that snap to a grid so a row of them is
+  actually a wall, plus a placeable anvil. Everything placed breaks back into
+  the item that made it. Bound to `F` and to a `PUT` button on touch.
+- **Farming**: wheat seeds plant into a crop that ripens into wheat, which is
+  what bread and meat pies are made of.
+- **The survivor's logs**: six story fragments found in chests, read on pickup.
+- 18 more recipes (43 total), ~30 more items, and 58 new art assets.
+- `scripts/loop-test.mjs`: a 19-check browser run of the entire progression,
+  surface to shaft to Warden to broadcast.
+- `reachability.test.ts`: proves every recipe ingredient can actually be
+  obtained from something in the world. Written because three separate content
+  updates had each shipped an item nothing produced.
+
+### Fixed
+- **Scrap metal had no source**, which made copper wiring, and therefore the
+  antenna, and therefore the ending, unreachable.
+- **Cooked food could not be eaten.** The eat check listed six raw ingredients
+  by name and nothing a furnace produced, so cooking meat made it useless.
+- **Wheat had no source**, so bread and meat pies were uncraftable.
+- **Titanium swords and the relic blade did 2 damage** — the same as a bare hand
+  — because combat named three swords explicitly. The Warden could not be killed
+  with the best weapon in the game.
+- **Clearing a collapsed shaft destroyed it** on the hit that opened it, so no
+  dungeon could ever be entered.
+
+### Changed
+- Tool gates, harvest drops, break thresholds, mob stats, mob drops, chest
+  tables, placement rules and food values are all data tables now. Four of the
+  five bugs above were branches that a table would not have allowed.
+- Lighting underground is set by depth rather than the clock, and the lantern
+  lights from anywhere in the pack rather than only the held slot.
+
 ## [Version 0.2.0] - Overhaul (2026-09-15)
 
 A full polish and art-regeneration pass. Every system from v0.1.0 still works;

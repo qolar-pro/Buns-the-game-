@@ -1,6 +1,6 @@
 {
   "name": "buns-the-game",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "test:mobile": "node scripts/mobile-test.mjs",
+    "test:loop": "node scripts/loop-test.mjs",
     "audit:assets": "node scripts/audit-assets.mjs",
     "assets:generate": "node scripts/generate-all.mjs",
     "assets:process": "node scripts/process-asset.mjs",

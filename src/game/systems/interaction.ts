@@ -8,11 +8,18 @@
 import { PLAYER_SIZE } from '../core/config';
 import { soundManager } from '../../../lib/SoundManager';
 import { addFloatingText } from './feedback';
+import { attackDamage, checkHarvest, rollDrop } from './harvesting';
+import { rollChest } from './loot';
+import { enemyDrops } from './mobs';
 import { SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
 import type { Animal, AnimalType, Enemy, EntityType, GameState, ItemType, Resource } from '../core/types';
 
 export interface InteractionDeps {
   state: GameState;
+  /** Level transitions, owned by systems/levels.ts. */
+  onEnterDungeon: (depth: 1 | 2 | 3) => void;
+  onDescend: () => void;
+  onAscend: () => void;
   colliders: Map<string, ColliderShape>;
   refreshUI: () => void;
   spawnItem: (type: ItemType, x: number, y: number, count: number) => void;
@@ -29,7 +36,20 @@ export interface InteractionDeps {
 export function createInteraction({
   state, colliders, refreshUI, spawnItem, dropLoot,
   getResourceDimensions, getAnimalSpriteInfo,
+  onEnterDungeon, onDescend, onAscend,
 }: InteractionDeps) {
+  /** Drop a resource out of the world by id. */
+  const removeResource = (id: string) => {
+    for (const [chunkId, chunk] of state.resources) {
+      const i = chunk.findIndex((r) => r.id === id);
+      if (i !== -1) {
+        chunk.splice(i, 1);
+        if (!chunk.length) state.resources.delete(chunkId);
+        return;
+      }
+    }
+  };
+
   const interact = () => {
     const { player } = state;
     const px = player.x + PLAYER_SIZE / 2;
@@ -51,20 +71,25 @@ export function createInteraction({
 
     if (targetEnemy) {
       const selectedItem = player.inventory[player.selectedSlot];
-      let damage = 2;
-      if (selectedItem) {
-        if (selectedItem.type === 'iron_sword') damage = 15;
-        else if (selectedItem.type === 'stone_sword') damage = 10;
-        else if (selectedItem.type === 'wooden_sword') damage = 6;
-        else if (selectedItem.type.includes('axe') || selectedItem.type.includes('pickaxe')) damage = 4;
-      }
+      // Damage comes from the tier table, so a titanium sword and the relic
+      // blade actually hit harder than iron — listed by name here, they did the
+      // same 2 damage as a bare hand, which made the Warden unkillable.
+      const damage = attackDamage(selectedItem?.type ?? null);
     
       targetEnemy.health -= damage;
       state.shake = 10;
       soundManager.playHit();
     
       if (targetEnemy.health <= 0) {
-        if (targetEnemy.type === 'wolf') spawnItem('leather', targetEnemy.x, targetEnemy.y, 1);
+        for (const drop of enemyDrops(targetEnemy.type)) {
+          spawnItem(drop.type, targetEnemy.x, targetEnemy.y, drop.count);
+        }
+        if (targetEnemy.type === 'warden') {
+          // The one source of the signal core. Without this the run cannot end.
+          state.progress.wardenDefeated = true;
+          state.message = { text: 'THE WARDEN FALLS. IT WAS CARRYING A SIGNAL CORE.', time: Date.now() + 4000 };
+        }
+        state.progress.mobsDefeated += 1;
         state.enemies.splice(enemyIndex, 1);
       }
       return;
@@ -132,13 +157,10 @@ export function createInteraction({
 
     if (targetAnimal) {
       const selectedItem = player.inventory[player.selectedSlot];
-      let damage = 2;
-      if (selectedItem) {
-        if (selectedItem.type === 'iron_sword') damage = 15;
-        else if (selectedItem.type === 'stone_sword') damage = 10;
-        else if (selectedItem.type === 'wooden_sword') damage = 6;
-        else if (selectedItem.type.includes('axe') || selectedItem.type.includes('pickaxe')) damage = 4;
-      }
+      // Damage comes from the tier table, so a titanium sword and the relic
+      // blade actually hit harder than iron — listed by name here, they did the
+      // same 2 damage as a bare hand, which made the Warden unkillable.
+      const damage = attackDamage(selectedItem?.type ?? null);
     
       targetAnimal.health -= damage;
       soundManager.playAnimal(targetAnimal.type);
@@ -195,51 +217,94 @@ export function createInteraction({
       let canBreak = true;
       let message = "";
 
-      // Tool Gating Logic
-      if (res.type === 'tree') {
-        if (!selectedItem || (selectedItem.type !== 'wooden_axe' && selectedItem.type !== 'stone_axe' && selectedItem.type !== 'iron_axe')) {
-          canBreak = false;
-          message = "Requires Axe";
-        } else {
-          damage = selectedItem.type === 'iron_axe' ? 8 : (selectedItem.type === 'stone_axe' ? 4.5 : 3);
+      // Tool gating comes from the table in systems/harvesting.ts.
+      const gate = checkHarvest(res.type, selectedItem?.type ?? null);
+      canBreak = gate.canBreak;
+      damage = gate.damage;
+      message = gate.message;
+
+      if (res.type === 'loot_chest') {
+        // Looting is an interaction, not a harvest: one press empties it.
+        const depth = state.level.kind === 'dungeon' ? state.level.depth : 1;
+        const taken = new Set(state.progress.uniquesTaken);
+        for (const roll of rollChest(depth, taken)) {
+          spawnItem(roll.type, res.x + 48, res.y + 64, roll.count);
         }
-      } else if (res.type === 'rock') {
-        if (!selectedItem || (selectedItem.type !== 'wooden_pickaxe' && selectedItem.type !== 'stone_pickaxe' && selectedItem.type !== 'iron_pickaxe')) {
-          canBreak = false;
-          message = "Requires Pickaxe";
-        } else {
-          damage = selectedItem.type === 'iron_pickaxe' ? 8 : (selectedItem.type === 'stone_pickaxe' ? 4.5 : 3);
-        }
-      } else if (res.type === 'iron_ore') {
-        if (!selectedItem || (selectedItem.type !== 'stone_pickaxe' && selectedItem.type !== 'iron_pickaxe')) {
-          canBreak = false;
-          message = "Requires Stone Pickaxe or higher";
-        } else {
-          damage = selectedItem.type === 'iron_pickaxe' ? 6 : 3;
-        }
-      } else if (res.type === 'coal_ore') {
-        if (!selectedItem || (selectedItem.type !== 'stone_pickaxe' && selectedItem.type !== 'iron_pickaxe')) {
-          canBreak = false;
-          message = "Requires Stone Pickaxe or higher";
-        } else {
-          damage = selectedItem.type === 'iron_pickaxe' ? 8 : 4.5;
-        }
-      } else if (res.type === 'antenna') {
-        // Antenna interaction: Contribute copper wiring
-        if (selectedItem && selectedItem.type === 'copper_wiring') {
-          res.antennaProgress = (res.antennaProgress || 0) + 5;
-          selectedItem.count--;
-          if (selectedItem.count <= 0) player.inventory[player.selectedSlot] = null;
-          state.message = { text: `Antenna Restored: ${Math.min(100, res.antennaProgress)}%`, time: Date.now() };
-          if (res.antennaProgress >= 100) {
-            state.message = { text: "TRANSMISSION RESTORED. YOU ARE NOT ALONE.", time: Date.now() + 5000 };
+        state.progress.uniquesTaken = [...taken];
+        state.progress.chestsLooted += 1;
+        soundManager.playOpenContainer();
+        state.message = { text: 'Chest looted', time: Date.now() };
+        removeResource(res.id);
+        refreshUI();
+        return;
+      }
+
+      if (res.type === 'dungeon_entrance' && res.hits >= res.maxHits - 0.01) {
+        // Already cleared: this is a doorway now.
+        onEnterDungeon(1);
+        return;
+      }
+
+      if (res.type === 'stairs_down') {
+        onDescend();
+        return;
+      }
+
+      if (res.type === 'dungeon_exit') {
+        onAscend();
+        return;
+      }
+
+      if (res.type === 'antenna') {
+        const progress = res.antennaProgress ?? 0;
+
+        // Stage 1 — restore the structure with wiring.
+        if (progress < 100) {
+          if (selectedItem && selectedItem.type === 'copper_wiring') {
+            res.antennaProgress = progress + 5;
+            selectedItem.count--;
+            if (selectedItem.count <= 0) player.inventory[player.selectedSlot] = null;
+            soundManager.playPlace();
+            state.message = {
+              text: `Antenna restored: ${Math.min(100, res.antennaProgress)}%`,
+              time: Date.now(),
+            };
+            if (res.antennaProgress >= 100) {
+              state.message = {
+                text: 'Structure complete. It needs a power source.',
+                time: Date.now() + 3000,
+              };
+            }
+            refreshUI();
+          } else {
+            state.message = {
+              text: `Needs copper wiring — ${Math.ceil((100 - progress) / 5)} more`,
+              time: Date.now(),
+            };
           }
-          refreshUI();
-          return;
-        } else {
-          state.message = { text: "Requires Copper Wiring to restore", time: Date.now() };
           return;
         }
+
+        // Stage 2 — install the core the Warden was carrying.
+        if (!res.coreInstalled) {
+          if (selectedItem && selectedItem.type === 'signal_core') {
+            selectedItem.count--;
+            if (selectedItem.count <= 0) player.inventory[player.selectedSlot] = null;
+            res.coreInstalled = true;
+            soundManager.playCraft();
+            state.message = { text: 'Signal core installed. Interact to broadcast.', time: Date.now() + 3000 };
+            refreshUI();
+          } else {
+            state.message = { text: 'Needs a signal core. The Warden has one.', time: Date.now() };
+          }
+          return;
+        }
+
+        // Stage 3 — broadcast. This ends the run.
+        state.progress.broadcast = true;
+        state.message = { text: 'TRANSMISSION SENT. SOMEONE IS COMING.', time: Date.now() + 8000 };
+        refreshUI();
+        return;
       } else if (res.type === 'branch' || res.type === 'small_rock' || res.type === 'grass' || res.type === 'bush' || res.type === 'sapling' || res.type === 'bed' || res.type === 'fence') {
         // Breakable by hand or any tool
         damage = 1;
@@ -258,6 +323,20 @@ export function createInteraction({
       res.hits += damage;
       res.lastHitAt = Date.now();
       state.shake = 8;
+
+      // A cleared shaft is a doorway, not debris. Without this it fell through
+      // to the generic "break and remove" path below, which deleted the only
+      // entrance to the dungeon on the hit that opened it — and the dungeon is
+      // the only source of the signal core, so the run could not be finished.
+      if (res.type === 'dungeon_entrance' && res.hits >= res.maxHits) {
+        res.hits = res.maxHits;
+        const rubble = rollDrop('rubble', 1);
+        if (rubble) spawnItem(rubble.type, res.x + dims.w / 2, res.y + dims.h * 0.8, rubble.count);
+        soundManager.playHarvest('stone');
+        state.message = { text: 'The shaft is open. Interact again to descend.', time: Date.now() };
+        refreshUI();
+        return;
+      }
     
       // Distinct per material: one sound for everything made wood and stone
       // indistinguishable by ear, which matters when harvesting off-screen.
@@ -305,62 +384,11 @@ export function createInteraction({
 
           chunkResources.splice(index, 1);
         } else {
-          // Remove resource
-          let dropType: ItemType = 'wood';
-          let dropCount = 0;
-
-          if (res.type === 'rock') {
-            dropType = 'stone';
-            dropCount = Math.floor(3 * res.scale);
-          } else if (res.type === 'coal_ore') {
-            dropType = 'coal';
-            dropCount = 1 + Math.floor(Math.random() * 3);
-          } else if (res.type === 'iron_ore') {
-            dropType = 'iron_ore';
-            dropCount = 1 + Math.floor(Math.random() * 2);
-          } else if (res.type === 'sapling') {
-            dropType = 'sapling';
-            dropCount = 1;
-          } else if (res.type === 'bush') {
-            dropType = 'wood';
-            dropCount = 2;
-          } else if (res.type === 'branch') {
-            dropType = 'wood';
-            dropCount = 1;
-          } else if (res.type === 'small_rock') {
-            dropType = 'stone';
-            dropCount = 1;
-          } else if (res.type === 'grass') {
-            // 20% chance to drop wheat seeds
-            if (Math.random() < 0.2) {
-              dropType = 'wheat_seeds';
-              dropCount = 1;
-            } else {
-              dropCount = 0; // Grass usually drops nothing or fiber (not implemented)
-            }
-          } else if (res.type === 'torch') {
-            dropType = 'torch';
-            dropCount = 1;
-          } else if (res.type === 'workbench') {
-            dropType = 'workbench';
-            dropCount = 1;
-          } else if (res.type === 'campfire') {
-            dropType = 'campfire';
-            dropCount = 1;
-          } else if (res.type === 'bed') {
-            dropType = 'bed';
-            dropCount = 1;
-          } else if (res.type === 'chest') {
-            dropType = 'chest';
-            dropCount = 1;
-          } else if (res.type === 'furnace') {
-            dropType = 'furnace';
-            dropCount = 1;
-          } else if (res.type === 'trunk') {
-            dropType = 'wood';
-            dropCount = Math.floor(4 * res.scale);
-          }
-        
+          // Remove resource. What it leaves behind is a row in HARVEST_DROPS,
+          // so adding a material is a row rather than another branch here.
+          const rolled = rollDrop(res.type, res.scale, res.growthStage);
+          const dropType: ItemType = rolled?.type ?? 'wood';
+          const dropCount = rolled?.count ?? 0;
           if (dropCount > 0) {
             addFloatingText(state, res.x + dims.w / 2, res.y + dims.h * 0.3, dropType, dropCount);
           }

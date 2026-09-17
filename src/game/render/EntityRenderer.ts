@@ -7,7 +7,7 @@
  * sheet and drew nothing.
  */
 import { FRAMES } from '../assets/frames';
-import type { Animal, AnimalType, Enemy, GameState } from '../core/types';
+import type { Animal, AnimalType, Enemy, EnemyKind, GameState } from '../core/types';
 
 type Sprite = HTMLCanvasElement;
 
@@ -18,8 +18,18 @@ export interface EntityRenderDeps {
     pig: () => Sprite | null;
     sheep: () => Sprite | null;
     chicken: () => Sprite | null;
+    /** Mob sheets, by kind. Kinds without art fall back to the drawn shapes. */
+    mobs: Partial<Record<EnemyKind, () => Sprite | null>>;
   };
 }
+
+/** Draw size per mob, in world units. The Warden is meant to look like a wall. */
+const MOB_SIZE: Partial<Record<EnemyKind, number>> = {
+  husk: 130,
+  crawler: 90,
+  sentinel: 140,
+  warden: 220,
+};
 
 /**
  * Bind the entity draw routines to a given state and sprite set.
@@ -134,11 +144,40 @@ export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
   };
 
 
+  /**
+   * Draw a mob from its sheet, if it has one.
+   *
+   * Returns false when there is no art, so the hand-drawn shades and wolves
+   * below keep working exactly as they did.
+   */
+  const drawMobSprite = (ctx: CanvasRenderingContext2D, enemy: Enemy): boolean => {
+    const img = sprites.mobs[enemy.type]?.() ?? null;
+    if (!img) return false;
+
+    const sheet = (FRAMES as Record<string, { grid?: { cols: number; rows: number } }>)[`characters/${enemy.type}`];
+    const rows = sheet?.grid?.rows ?? 4;
+    const cols = sheet?.grid?.cols ?? 3;
+    const sw = img.width / cols;
+    const sh = img.height / rows;
+
+    // Sheets are one row per facing; mobs only ever face left or right in the
+    // sim, so the side rows are the only ones that can be picked here.
+    const frameY = enemy.facing === 'left' ? 1 : 2;
+    const moving = enemy.state === 'chase';
+    const frameX = moving ? Math.floor((Date.now() / 140) % cols) : 0;
+
+    const size = MOB_SIZE[enemy.type] ?? 120;
+    ctx.drawImage(img, frameX * sw, frameY * sh, sw, sh, -size / 2, -size, size, size);
+    return true;
+  };
+
   const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy) => {
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
 
-      if (enemy.type === 'static') {
+      if (drawMobSprite(ctx, enemy)) {
+        // Drawn from art; nothing more to do but the health bar below.
+      } else if (enemy.type === 'static') {
         // Phantasmal 'Static' effect
         const pulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
         ctx.globalAlpha = 0.6 * pulse;
@@ -202,7 +241,7 @@ export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
 
       // Health bar
       if (enemy.health < enemy.maxHealth) {
-        const bw = 40;
+        const bw = enemy.type === 'warden' ? 120 : 40;
         const bh = 4;
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(-bw/2, -80, bw, bh);

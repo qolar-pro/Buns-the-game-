@@ -19,6 +19,7 @@ export interface TerrainTiles {
   grass: Tile | null;
   grassVariant: Tile | null;
   dirt: Tile | null;
+  stone: Tile | null;
 }
 
 /** Size of one terrain tile in world units. */
@@ -156,4 +157,51 @@ function buildMask(
   }
   mctx.putImageData(image, 0, 0);
   return mask;
+}
+
+/** How much darker each depth reads. Depth 3 is nearly black without a light. */
+const DEPTH_DIM = [0, 0.18, 0.3, 0.42];
+
+/**
+ * Rasterise one chunk of dungeon floor.
+ *
+ * Deliberately not the same function as the surface one: underground there is
+ * no grass, no dirt blend and no blight, and threading three unused flags
+ * through `renderChunkTerrain` would be harder to read than a second pass that
+ * does one thing. Falls back to dirt while the stone tile is still loading, so
+ * a dungeon is never an empty void.
+ */
+export function renderDungeonTerrain(
+  cx: number,
+  cy: number,
+  tiles: TerrainTiles,
+  depth: number,
+): HTMLCanvasElement | null {
+  const tile = tiles.stone ?? tiles.dirt;
+  if (!tile) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = CHUNK_SIZE;
+  canvas.height = CHUNK_SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+
+  fillTiled(ctx, tile, cx * CHUNK_SIZE, cy * CHUNK_SIZE);
+
+  // Rock rather than daylight: the ambient tint is baked into the chunk so the
+  // lighting pass only has to handle torches and the lantern.
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = 'rgb(120, 118, 132)';
+  ctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
+  ctx.restore();
+
+  const dim = DEPTH_DIM[Math.min(depth, DEPTH_DIM.length - 1)] ?? 0;
+  if (dim > 0) {
+    ctx.fillStyle = `rgba(6, 4, 12, ${dim})`;
+    ctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
+  }
+
+  return canvas;
 }

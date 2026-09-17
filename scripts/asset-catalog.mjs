@@ -124,6 +124,56 @@ const items = [
   I('iron_ore', 'a grey rock chunk streaked with rusty orange-brown iron ore veins'),
 ];
 
+// --- Content update: ores, dungeon props, building -------------------------
+const contentWorld = [
+  P('copper_ore', 'a grey boulder studded with bright orange-green copper veins embedded in the rock'),
+  P('titanium_ore', 'a dark grey boulder studded with glowing pale blue-white titanium crystals'),
+  P('rubble', 'a pile of broken grey stone rubble and rock debris'),
+  L('dungeon_entrance', 'a collapsed mine shaft entrance in the ground, wooden support beams, dark opening choked with rubble'),
+  P('dungeon_exit', 'a wooden ladder leading up out of a dark hole in the ground'),
+  P('stairs_down', 'a dark stone staircase descending into a black hole in the ground'),
+  L('loot_chest', 'an ornate iron-bound treasure chest with a heavy lock, slightly battered and ancient'),
+  P('brazier', 'a standing iron brazier with burning orange coals'),
+  L('wall', 'a section of stacked wooden log wall, sturdy and rough hewn'),
+  P('floor', 'a square of fitted wooden planks laid as flooring'),
+  L('door', 'a heavy wooden door with iron hinges and a round handle'),
+  L('anvil', 'a heavy black iron anvil on a thick wooden block'),
+  // Farming. Wheat had an icon and two recipes but nothing in the world grew it.
+  { ...P('crop_seedling', 'a row of tiny green wheat shoots just sprouted from dark tilled soil'), w: 64, h: 64 },
+  P('crop_growing', 'a clump of young green wheat stalks, knee high, not yet eared'),
+  P('crop_wheat', 'a clump of tall ripe golden wheat stalks heavy with grain ears'),
+];
+
+const contentItems = [
+  I('copper_ore', 'a grey rock chunk streaked with bright orange copper veins'),
+  I('copper_ingot', 'a single polished orange copper ingot bar with a metallic sheen'),
+  I('titanium_ore', 'a dark rock chunk studded with glowing pale blue titanium crystals'),
+  I('titanium_ingot', 'a single polished pale blue-white titanium ingot bar, faintly glowing'),
+  I('titanium_axe', 'a woodcutting axe with a dark handle and a glowing pale blue titanium head'),
+  I('titanium_pickaxe', 'a pickaxe with a dark handle and a glowing pale blue titanium head'),
+  I('titanium_sword', 'a sword with a glowing pale blue titanium blade and a dark wrapped grip'),
+  I('titanium_helm', 'a pale blue titanium helmet with a narrow visor slit'),
+  I('titanium_chestplate', 'a pale blue titanium breastplate armour'),
+  I('titanium_greaves', 'pale blue titanium leg armour greaves'),
+  I('titanium_boots', 'a pair of pale blue titanium armoured boots'),
+  I('wall', 'a small section of stacked wooden log wall'),
+  I('floor', 'a square tile of fitted wooden planks'),
+  I('door', 'a small wooden door with iron hinges'),
+  I('anvil', 'a small black iron anvil on a wooden block'),
+  I('lantern', 'a copper and glass lantern with a warm glowing flame inside'),
+  I('bandage', 'a rolled white cloth bandage tied with a strip'),
+  I('ration', 'a wrapped bundle of preserved food tied with string'),
+  I('torch_bundle', 'a bundle of four wooden torches tied together with rope'),
+  I('throwing_knife', 'a small slim steel throwing knife with a wrapped handle'),
+  I('rope', 'a neat coil of braided brown rope'),
+  I('relic_blade', 'an ancient ornate sword with a dark blade and glowing golden runes along it'),
+  I('prospectors_pick', 'an ornate brass and steel pickaxe with an engraved head, clearly a masterwork'),
+  I('wardens_key', 'a large ornate dark iron key with a glowing blue gem set in the bow'),
+  I('signal_core', 'a glowing blue crystalline power core in a metal housing, humming with energy'),
+  I('survivors_log', 'a weathered leather-bound journal with loose handwritten pages'),
+  I('antenna_frame', 'a folded metal antenna frame assembly of struts and brackets'),
+];
+
 // --- Characters -------------------------------------------------------------
 // Diffusion cannot hold a character consistent across the cells of a sprite
 // grid — the first attempt produced a scatter of unrelated figures rather than
@@ -149,6 +199,13 @@ const creature = (id, cols, desc) =>
     sheet: { id, cols, dir },
     prompt: `${desc}, ${view}, full body visible, standing upright, single character, centred`,
   }));
+
+const contentCreatures = [
+  ...creature('husk', 3, 'a gaunt hunched humanoid husk with grey cracked skin and hollow glowing eyes'),
+  ...creature('crawler', 3, 'a small fast six-legged insectoid crawler with a dark chitin shell'),
+  ...creature('sentinel', 3, 'a tall armoured stone golem sentinel with glowing blue seams'),
+  ...creature('warden', 3, 'a massive hulking armoured warden boss with a glowing blue core in its chest, imposing'),
+];
 
 const characters = [
   ...creature('player', 8, 'a friendly farmer character wearing a wide straw hat, a red shirt and blue denim overalls'),
@@ -184,6 +241,7 @@ const ui = [
 
 export const CATALOG = [
   ...terrain, ...detail, ...resources, ...placeables, ...items, ...characters, ...effects, ...ui,
+  ...contentWorld, ...contentItems, ...contentCreatures,
 ];
 
 export const BY_ID = new Map(CATALOG.map((a) => [`${a.atlas}/${a.id}`, a]));

@@ -21,6 +21,8 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { PauseMenu } from '@/components/ui/PauseMenu';
 import { RotatePrompt } from '@/components/ui/RotatePrompt';
 import { SaveIndicator } from '@/components/ui/SaveIndicator';
+import { QuestLog } from '@/components/ui/QuestLog';
+import { EndingScreen } from '@/components/ui/EndingScreen';
 import { TouchControls } from '@/components/ui/TouchControls';
 import { useIsPortrait, useIsTouch } from '@/hooks/use-touch';
 import { useSave } from '@/hooks/use-save'
@@ -154,6 +156,9 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
           }}
         />
       )}
+
+      {assetsReady && <QuestLog />}
+      <EndingScreen onReturn={() => onExitToMenu?.()} />
 
       <SaveIndicator state={saveState} />
 
