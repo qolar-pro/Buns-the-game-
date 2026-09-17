@@ -12,15 +12,17 @@
  */
 import { CHUNK_SIZE } from '../core/config';
 import { fbm } from '../world/noise';
+import { PROFILES, biomeAt } from '../world/biomes';
 
 export type Tile = CanvasImageSource & { width: number; height: number };
 
-export interface TerrainTiles {
-  grass: Tile | null;
-  grassVariant: Tile | null;
-  dirt: Tile | null;
-  stone: Tile | null;
-}
+/**
+ * Loaded ground tiles, keyed by their atlas id (`terrain/snow`, …).
+ *
+ * A map rather than named fields: biomes name their tiles in `PROFILES`, and a
+ * fixed set of fields would mean editing this file to add a biome.
+ */
+export type TerrainTiles = Record<string, Tile | null>;
 
 /** Size of one terrain tile in world units. */
 export const TILE = 128;
@@ -58,7 +60,11 @@ function fillTiled(
  * Rasterise one chunk's ground. Returns null while tiles are still loading.
  */
 export function renderChunkTerrain(cx: number, cy: number, tiles: TerrainTiles): HTMLCanvasElement | null {
-  const { grass, grassVariant, dirt } = tiles;
+  const biome = biomeAt(cx, cy);
+  const profile = PROFILES[biome];
+  const grass = tiles[profile.ground] ?? tiles['terrain/grass'];
+  const grassVariant = tiles[profile.accent] ?? null;
+  const dirt = tiles['terrain/dirt'];
   if (!grass || !dirt) return null;
 
   const canvas = document.createElement('canvas');
@@ -89,7 +95,11 @@ export function renderChunkTerrain(cx: number, cy: number, tiles: TerrainTiles):
     }
   }
 
-  // 3. Dirt, masked by the same noise field the original used.
+  // 3. Dirt, masked by the same noise field the original used. Only in the
+  //    meadows: a dirt patch in snow reads as a hole, and the desert already is
+  //    dirt. Both draw their accent tile in step 2 instead.
+  if (biome !== 'grassland') return canvas;
+
   const dirtLayer = document.createElement('canvas');
   dirtLayer.width = CHUNK_SIZE;
   dirtLayer.height = CHUNK_SIZE;
@@ -177,7 +187,7 @@ export function renderDungeonTerrain(
   tiles: TerrainTiles,
   depth: number,
 ): HTMLCanvasElement | null {
-  const tile = tiles.stone ?? tiles.dirt;
+  const tile = tiles['terrain/stone_floor'] ?? tiles['terrain/dirt'];
   if (!tile) return null;
 
   const canvas = document.createElement('canvas');

@@ -68,13 +68,17 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
   const chunkCanvases = new Map<string, HTMLCanvasElement>();
   let view = { zoom: 1, dpr: 1 };
   const debugColliders = { current: false };
-  const terrainTiles: TerrainTiles = { grass: null, grassVariant: null, dirt: null, stone: null };
+  const terrainTiles: TerrainTiles = {};
   const animalSprites: Record<string, Sprite | null> = {
     cow: null, pig: null, sheep: null, chicken: null,
   };
   /** Mob sheets. Shades and wolves have no art and stay hand-drawn. */
   const mobSprites: Record<string, Sprite | null> = {
     husk: null, crawler: null, sentinel: null, warden: null,
+    scorpion: null, frost_wolf: null, bog_lurker: null,
+  };
+  const npcSprites: Record<string, Sprite | null> = {
+    villager: null, trader: null, elder: null,
   };
   const spriteSet: SpriteSet = {
     tree: null, smallTree: null, sapling: null, trunk: null, bush: null,
@@ -130,13 +134,24 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
           crawler: s('characters/crawler'),
           sentinel: s('characters/sentinel'),
           warden: s('characters/warden'),
+          scorpion: s('characters/scorpion'),
+          frost_wolf: s('characters/frost_wolf'),
+          bog_lurker: s('characters/bog_lurker'),
         });
-        Object.assign(terrainTiles, {
-          grass: s('terrain/grass'),
-          grassVariant: s('terrain/grass_variant'),
-          dirt: s('terrain/dirt'),
-          stone: s('terrain/stone_floor'),
+        Object.assign(npcSprites, {
+          villager: s('characters/villager'),
+          trader: s('characters/trader'),
+          elder: s('characters/elder'),
         });
+        // Keyed by atlas id so a new biome is a row in PROFILES, not a field
+        // added here and in the renderer and in this assignment.
+        for (const id of [
+          'terrain/grass', 'terrain/grass_variant', 'terrain/dirt', 'terrain/stone_floor',
+          'terrain/sand', 'terrain/snow', 'terrain/marsh', 'terrain/cracked_earth',
+          'terrain/wood_floor',
+        ]) {
+          terrainTiles[id] = s(id);
+        }
       };
 
       assets
@@ -337,7 +352,7 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
 
 
         // Animal and enemy drawing lives in src/game/render/EntityRenderer.ts.
-        const { getAnimalSpriteInfo, drawAnimal, drawEnemy } = createEntityRenderer({
+        const { getAnimalSpriteInfo, drawAnimal, drawEnemy, drawNpc } = createEntityRenderer({
           state,
           sprites: {
             cow: () => animalSprites.cow,
@@ -349,6 +364,14 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
               crawler: () => mobSprites.crawler,
               sentinel: () => mobSprites.sentinel,
               warden: () => mobSprites.warden,
+              scorpion: () => mobSprites.scorpion,
+              frost_wolf: () => mobSprites.frost_wolf,
+              bog_lurker: () => mobSprites.bog_lurker,
+            },
+            people: {
+              villager: () => npcSprites.villager,
+              trader: () => npcSprites.trader,
+              elder: () => npcSprites.elder,
             },
           },
         });
@@ -391,6 +414,7 @@ export function createEngine(host: EngineHost, state: GameState): Engine {
           getAnimalSpriteInfo,
           drawAnimal,
           drawEnemy,
+          drawNpc,
         });
 
         // Keyboard and mouse handlers live in src/game/input/KeyboardMouse.ts.

@@ -13,7 +13,16 @@ export type EntityType =
   | 'torch' | 'workbench' | 'campfire' | 'bed' | 'chest' | 'furnace' | 'antenna' | 'fence'
   | 'wall' | 'floor' | 'door' | 'anvil' | 'wheat_crop'
   // dungeon
-  | 'dungeon_entrance' | 'dungeon_exit' | 'stairs_down' | 'rubble' | 'loot_chest' | 'brazier';
+  | 'dungeon_entrance' | 'dungeon_exit' | 'stairs_down' | 'rubble' | 'loot_chest' | 'brazier'
+  // desert
+  | 'cactus' | 'dead_bush' | 'desert_rock' | 'palm_tree'
+  // snow
+  | 'pine_tree' | 'snow_rock' | 'ice_shard' | 'frost_flower'
+  // swamp
+  | 'reeds' | 'lily_pad' | 'swamp_tree' | 'bog_iron' | 'glow_moss'
+  // villages
+  | 'village_house' | 'village_hall' | 'well' | 'market_stall' | 'signpost' | 'lamppost'
+  | 'crate' | 'barrel';
 export type ItemType =
   | 'wood' | 'stone' | 'sapling' | 'coal' | 'stick' | 'workbench' | 'campfire' | 'torch' | 'wheat_seeds' | 'wooden_axe' | 'wooden_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'wooden_sword' | 'stone_sword' | 'raw_beef' | 'leather' | 'raw_pork' | 'mutton' | 'wool' | 'raw_chicken' | 'feather' | 'egg' | 'bed' | 'leather_cap' | 'leather_tunic' | 'leather_pants' | 'leather_boots' | 'leather_backpack' | 'chest' | 'furnace' | 'cooked_beef' | 'cooked_pork' | 'cooked_mutton' | 'cooked_chicken' | 'scrap_metal' | 'copper_wiring' | 'iron_ore' | 'iron_ingot' | 'iron_axe' | 'iron_pickaxe' | 'iron_sword' | 'antenna' | 'fence' | 'bread' | 'meat_pie' | 'omelet' | 'wheat'
   // --- added in the content update ---
@@ -29,7 +38,20 @@ export type ItemType =
   // dungeon uniques
   | 'relic_blade' | 'prospectors_pick' | 'wardens_key' | 'signal_core' | 'survivors_log'
   // antenna chain
-  | 'antenna_frame';
+  | 'antenna_frame'
+  // --- biomes: each one gates a material the combat tree needs ---
+  | 'plant_fiber' | 'thick_fur' | 'reed_bundle' | 'bog_iron' | 'frost_crystal'
+  | 'glow_moss' | 'sand' | 'glass' | 'cactus_flesh'
+  // ranged
+  | 'bow' | 'crossbow' | 'arrow' | 'iron_arrow' | 'quiver'
+  // shields and armour sets
+  | 'wooden_shield' | 'iron_shield' | 'titanium_shield'
+  | 'fur_cap' | 'fur_coat' | 'fur_leggings' | 'fur_boots'
+  | 'chainmail_coif' | 'chainmail_hauberk' | 'chainmail_chausses' | 'iron_boots'
+  // village economy
+  | 'trade_token' | 'supply_crate' | 'village_charter'
+  // the second ending
+  | 'power_cell';
 
 export interface Ingredient {
   type: ItemType;
@@ -50,7 +72,9 @@ export type Equipment = Record<EquipmentSlotName, InventorySlot | null>;
 export type AnimalType = 'cow' | 'pig' | 'sheep' | 'chicken';
 
 /** Hostiles. `static` and `wolf` predate the content update. */
-export type EnemyKind = 'static' | 'wolf' | 'husk' | 'crawler' | 'sentinel' | 'warden';
+export type EnemyKind =
+  | 'static' | 'wolf' | 'husk' | 'crawler' | 'sentinel' | 'warden'
+  | 'scorpion' | 'frost_wolf' | 'bog_lurker';
 
 export type AnimalState = 'idle' | 'wander' | 'panic';
 
@@ -118,6 +142,37 @@ export interface Enemy {
   tier?: number; // For static enemies (1-5)
 }
 
+export type NpcRole = 'villager' | 'trader' | 'elder';
+
+/**
+ * A person, as opposed to an animal or a hostile.
+ *
+ * Deliberately its own list rather than an `Animal` with a new type: animals
+ * exist to be butchered, and every drop table, harvest gate and attack path
+ * treats them that way. A villager sharing that type would be a villager you
+ * could kill for beef.
+ */
+export interface Npc {
+  id: string;
+  role: NpcRole;
+  /** Shown when you talk to them. */
+  name: string;
+  x: number;
+  y: number;
+  /** Where they drift back to; villagers stay near their own village. */
+  homeX: number;
+  homeY: number;
+  targetX: number;
+  targetY: number;
+  state: 'idle' | 'wander';
+  timer: number;
+  facing: 'left' | 'right' | 'up' | 'down';
+  animFrame: number;
+  isMoving: boolean;
+  /** Village id, so stock and requests are per settlement. */
+  village: string;
+}
+
 export interface DroppedItem {
   id: string;
   x: number;
@@ -147,6 +202,7 @@ export type RenderEntity =
     isItem?: boolean;
     isAnimal?: boolean;
     isEnemy?: boolean;
+    isNpc?: boolean;
     isParticle?: boolean;
     isTargeted?: boolean;
   };
@@ -202,6 +258,14 @@ export interface GameState {
   };
   isPaused: boolean;
   /** Where the player is. Dungeons are separate, bounded levels. */
+  /** People in the loaded world. */
+  npcs: Npc[];
+  /** Villages the player has walked into, by id. Drives the safe-haven rules. */
+  villagesFound: string[];
+  /** Open trade partner, or null. Mirrors openChestId. */
+  talkingToId: string | null;
+  /** Village request ids already handed in. */
+  requestsDone: string[];
   level: { kind: 'surface' } | { kind: 'dungeon'; depth: 1 | 2 | 3; seed: number };
   /** Run statistics, for the quest log and the ending summary. */
   progress: {

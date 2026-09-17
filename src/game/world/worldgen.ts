@@ -10,6 +10,8 @@
  */
 import { CHUNK_SIZE } from '../core/config';
 import { fbm, hash } from './noise';
+import { PROFILES, biomeAt, biomeStrength } from './biomes';
+import { generateVillage, hasVillage } from './village';
 import { MOBS } from '../systems/mobs';
 import { hitsToBreak } from '../systems/harvesting';
 import type { AnimalType, EnemyKind, EntityType, GameState, ItemType } from '../core/types';
@@ -194,6 +196,20 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
 
     // Cohesive Biome Noise (matches terrain scale)
     const terrainVal = fbm(cx * CHUNK_SIZE * 0.0006, cy * CHUNK_SIZE * 0.0006, 3);
+
+    const biome = biomeAt(cx, cy);
+
+    // A village replaces whatever would have grown here. Generated whole rather
+    // than scattered, so the plan survives and the streets stay clear.
+    if (hasVillage(cx, cy)) {
+      const village = generateVillage(cx, cy);
+      state.resources.set(chunkId, village.buildings);
+      for (const resident of village.residents) {
+        if (!state.npcs.some((n) => n.id === resident.id)) state.npcs.push(resident);
+      }
+      if (!state.villagesFound.includes(village.id)) state.villagesFound.push(village.id);
+      return;
+    }
   
     // Helper to try spawning multiple times if it fails due to overlap
     const trySpawn = (type: EntityType, fx?: number, fy?: number) => {
@@ -203,6 +219,47 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
       }
       return false;
     };
+
+    // A biome other than grassland brings its own table, and only its own.
+    // Mixing in the meadow scatter made the desert look like a meadow with
+    // cacti in it, which is not a desert.
+    if (biome !== 'grassland') {
+      const profile = PROFILES[biome];
+      const strength = biomeStrength(cx, cy);
+      for (const spawn of profile.spawns) {
+        // Fractional counts: the whole part always spawns, the remainder is a
+        // chance. Scaled by how deep in the biome the chunk sits, so the
+        // border thins out rather than stopping dead.
+        const expected = spawn.per * (0.5 + strength * 0.5);
+        let count = Math.floor(expected);
+        if (random() < expected - count) count += 1;
+        for (let i = 0; i < count; i++) trySpawn(spawn.type);
+      }
+
+      // A little ground cover everywhere, so nowhere is bare canvas.
+      const scatter = 3 + Math.floor(random() * 4);
+      for (let i = 0; i < scatter; i++) trySpawn(biome === 'snow' ? 'small_rock' : 'grass');
+
+      // Metal still appears underfoot in every biome; ore districts are their
+      // own field and do not care about climate.
+      const metalHere = fbm(cx * 0.35 + 3100, cy * 0.35 + 3100, 2);
+      if (metalHere > 0.50) {
+        if (random() < 0.5) trySpawn('copper_ore');
+        if (random() < 0.4) trySpawn('iron_ore');
+      }
+      const shaftHere = fbm(cx * 0.8 + 7700, cy * 0.8 + 7700, 2);
+      if (shaftHere > 0.55 && random() < 0.6) trySpawn('dungeon_entrance');
+
+      // Natives, placed as resting spawns so the biome is inhabited on arrival.
+      for (const native of profile.natives) {
+        if (random() < native.per) {
+          const nx = cx * CHUNK_SIZE + random() * CHUNK_SIZE;
+          const ny = cy * CHUNK_SIZE + random() * CHUNK_SIZE;
+          spawnEnemy(native.kind, nx, ny);
+        }
+      }
+      return;
+    }
 
     // 1. Lush Grass Biome (Drastically reduced)
     if (terrainVal < 0.52) {

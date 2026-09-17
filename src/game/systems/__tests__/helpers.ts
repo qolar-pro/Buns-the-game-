@@ -17,6 +17,10 @@ export function makeState(slots: (InventorySlot | null)[] = []): GameState {
     resources: new Map(),
     level: { kind: 'surface' },
     questsDone: [],
+    npcs: [],
+    villagesFound: [],
+    talkingToId: null,
+    requestsDone: [],
     progress: {
       daysSurvived: 0,
       deepestDepth: 0,

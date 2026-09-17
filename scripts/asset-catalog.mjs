@@ -215,6 +215,92 @@ const characters = [
   ...creature('chicken', 3, 'a white chicken with a red comb'),
 ];
 
+
+// --- Biomes, villages, ranged combat and armour ----------------------------
+// Three surface biomes, each gating one material the combat systems need, plus
+// settlements to spend loot in. Grouped by atlas rather than by feature so the
+// packer's per-atlas budgets stay legible.
+
+const biomeTerrain = [
+  T('snow', 'a continuous field of clean fresh snow, soft even powder with faint wind ripples'),
+  T('marsh', 'dark wet peat bog ground, soaked earth with patches of moss and shallow water'),
+  T('cracked_earth', 'pale dry cracked desert hardpan, polygonal cracks and fine dust'),
+];
+
+const biomeWorld = [
+  // Desert
+  L('cactus', 'a tall green saguaro cactus with two raised arms and rows of white spines'),
+  P('dead_bush', 'a dry brittle leafless brown bush of tangled twigs'),
+  P('desert_rock', 'a wind-carved pale sandstone boulder with smooth banded layers'),
+  L('palm_tree', 'a tall slender palm tree with a curved trunk and a crown of green fronds'),
+  // Snow
+  L('pine_tree', 'a tall dark green conifer pine tree with snow resting on its branches'),
+  P('snow_rock', 'a grey boulder capped with a thick rounded layer of white snow'),
+  P('ice_shard', 'a cluster of pale translucent blue ice shards jutting up from the ground'),
+  P('frost_flower', 'a small cluster of pale blue crystalline frost flowers on a frozen stem'),
+  // Swamp
+  P('reeds', 'a dense clump of tall green marsh reeds with brown seed heads'),
+  P('lily_pad', 'two flat round green lily pads floating on dark water, one with a white flower'),
+  L('swamp_tree', 'a gnarled dead swamp tree with bare twisted branches and hanging moss'),
+  P('bog_iron', 'a rust orange lump of bog iron ore crusted with dark peat'),
+  P('glow_moss', 'a patch of soft glowing pale green moss, faintly luminous'),
+  // Villages
+  L('village_house', 'a small cosy cottage with whitewashed walls, a steep red tiled roof, a wooden door and one shuttered window'),
+  L('village_hall', 'a larger timber-framed longhouse with a thatched roof and a carved wooden porch'),
+  P('well', 'a round stone village well with a wooden roof frame, a rope and a hanging bucket'),
+  P('market_stall', 'a small wooden market stall with a striped awning and crates of goods'),
+  P('signpost', 'a weathered wooden signpost with two blank arrow boards pointing opposite ways'),
+  P('lamppost', 'a wrought iron village lamppost with a glowing warm yellow lantern on top'),
+  P('crate', 'a stack of two wooden shipping crates with iron banding'),
+  P('barrel', 'a wooden barrel with iron hoops, standing upright'),
+];
+
+const biomeItems = [
+  // Gated materials
+  I('plant_fiber', 'a small bundle of pale green stringy plant fibres, loosely tied'),
+  I('thick_fur', 'a folded pelt of thick shaggy white winter fur'),
+  I('reed_bundle', 'a tied bundle of straight green marsh reeds'),
+  I('bog_iron', 'a rough rust orange lump of bog iron ore crusted with dark peat'),
+  I('frost_crystal', 'a single faceted pale blue frost crystal with a cold inner glow'),
+  I('glow_moss', 'a small clump of glowing pale green moss'),
+  I('sand', 'a small conical heap of fine pale golden sand'),
+  I('glass', 'a clear polished glass pane square with a faint blue-green edge'),
+  I('cactus_flesh', 'a wedge of pale green juicy cactus flesh with a cut face'),
+  // Ranged combat
+  I('bow', 'a curved wooden shortbow strung with a taut pale string'),
+  I('crossbow', 'a compact wooden crossbow with an iron trigger and a short taut string'),
+  I('arrow', 'a single wooden arrow with grey fletching and a sharp iron head, pointing up-right'),
+  I('iron_arrow', 'a single arrow with a heavy iron broadhead and white fletching, pointing up-right'),
+  I('quiver', 'a brown leather quiver holding several arrows with feather fletching'),
+  // Shields and armour
+  I('wooden_shield', 'a round wooden shield with iron bands and a central boss'),
+  I('iron_shield', 'a kite shaped iron shield with a riveted rim'),
+  I('titanium_shield', 'a sleek pale blue-white titanium shield with a glowing seam'),
+  I('fur_cap', 'a warm white fur hat with thick folded flaps'),
+  I('fur_coat', 'a heavy white fur coat with a thick collar'),
+  I('fur_leggings', 'thick white fur trousers'),
+  I('fur_boots', 'a pair of tall white fur lined winter boots'),
+  I('chainmail_coif', 'an iron chainmail hood of fine interlocking rings'),
+  I('chainmail_hauberk', 'an iron chainmail shirt of fine interlocking rings'),
+  I('chainmail_chausses', 'iron chainmail leg armour of fine interlocking rings'),
+  I('iron_boots', 'a pair of heavy riveted iron boots'),
+  // Village economy
+  I('trade_token', 'a small stamped bronze trade token coin with a worn emblem'),
+  I('supply_crate', 'a small closed wooden supply crate with rope handles'),
+  I('village_charter', 'a rolled parchment charter tied with a red ribbon and a wax seal'),
+  // The second ending
+  I('power_cell', 'a cylindrical industrial power cell with a glowing green charge window'),
+];
+
+const biomeCreatures = [
+  ...creature('scorpion', 3, 'a large sand coloured desert scorpion with raised pincers and a curled stinger tail'),
+  ...creature('frost_wolf', 3, 'a large shaggy white winter wolf with pale blue eyes'),
+  ...creature('bog_lurker', 3, 'a hunched mossy swamp creature of tangled weed and dark wet limbs, glowing eyes'),
+  ...creature('villager', 3, 'a friendly villager in a brown belted tunic, simple trousers and a woollen cap'),
+  ...creature('trader', 3, 'a travelling merchant in a long blue coat with a heavy pack and a wide brimmed hat'),
+  ...creature('elder', 3, 'an old village elder in grey robes with a white beard and a walking staff'),
+];
+
 // --- Effects (6) ------------------------------------------------------------
 const effects = [
   E('hit_spark', 'a sharp white and yellow impact spark burst, radiating star shape'),
@@ -241,6 +327,7 @@ const ui = [
 
 export const CATALOG = [
   ...terrain, ...detail, ...resources, ...placeables, ...items, ...characters, ...effects, ...ui,
+  ...biomeTerrain, ...biomeWorld, ...biomeItems, ...biomeCreatures,
   ...contentWorld, ...contentItems, ...contentCreatures,
 ];
 

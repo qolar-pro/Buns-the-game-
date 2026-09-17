@@ -16,11 +16,12 @@ import { SMELT_RECIPES } from '../../core/config';
 import { CRAFTING_RECIPES as RECIPES } from '../../core/recipes';
 import { foodValue, isFood } from '../food';
 import { LOG_ENTRIES } from '../lore';
-import { harvestableItems } from '../harvesting';
+import { HARVEST_DROPS, harvestableItems } from '../harvesting';
+import { PROFILES } from '../../world/biomes';
 import { possibleLoot, type Depth } from '../loot';
 import { MOBS, enemyDrops } from '../mobs';
 import { OBJECTIVES } from '../quests';
-import type { EnemyKind, ItemType } from '../../core/types';
+import type { EnemyKind, EntityType, ItemType } from '../../core/types';
 
 /** Animal butchering, which lives inline in worldgen's dropLoot. */
 const ANIMAL_DROPS: ItemType[] = [
@@ -145,6 +146,57 @@ describe('food', () => {
     for (const item of shouldBeFood) {
       expect(outputs.has(item), `${item} is not produced by anything`).toBe(true);
       expect(isFood(item), `${item} cannot be eaten`).toBe(true);
+    }
+  });
+});
+
+describe('biome gates', () => {
+  const have = reachableItems();
+
+  it('makes every gated material obtainable', () => {
+    // Each biome owns one material. If a biome's material has no source, that
+    // biome is scenery and the gear behind it is unreachable.
+    for (const item of ['plant_fiber', 'thick_fur', 'reed_bundle', 'frost_crystal', 'sand', 'glow_moss'] as ItemType[]) {
+      expect(have.has(item), `${item} is unobtainable`).toBe(true);
+    }
+  });
+
+  it('keeps bows behind the desert', () => {
+    // The gate is only a gate if nothing outside the desert produces it. Cactus,
+    // dead bush and the scorpion are all desert; wool rope must not sneak past.
+    const bow = RECIPES.find((r) => r.id === 'bow')!;
+    expect(bow.ingredients.some((i) => i.type === 'plant_fiber')).toBe(true);
+
+    const fiberSources = Object.entries(HARVEST_DROPS)
+      .filter(([, rule]) => rule!.drops.some((d) => d.type === 'plant_fiber'))
+      .map(([type]) => type);
+    expect(fiberSources.sort()).toEqual(['cactus', 'dead_bush']);
+  });
+
+  it('gives every biome material a use', () => {
+    const consumed = new Set<ItemType>(RECIPES.flatMap((r) => r.ingredients.map((i) => i.type)));
+    for (const item of ['plant_fiber', 'thick_fur', 'reed_bundle', 'frost_crystal', 'sand', 'glass', 'glow_moss'] as ItemType[]) {
+      const used = consumed.has(item) || isFood(item);
+      expect(used, `${item} has no use`).toBe(true);
+    }
+  });
+
+  it('spawns every biome material somewhere in the world', () => {
+    // The bug this file exists for: an item with a drop rule whose entity never
+    // appears in the world is exactly as unobtainable as one with no rule.
+    const spawned = new Set<string>();
+    for (const profile of Object.values(PROFILES)) {
+      for (const s of profile.spawns) spawned.add(s.type);
+    }
+    for (const entity of ['cactus', 'dead_bush', 'ice_shard', 'reeds', 'bog_iron', 'glow_moss'] as EntityType[]) {
+      expect(spawned.has(entity), `${entity} is in the drop table but nothing spawns it`).toBe(true);
+    }
+  });
+
+  it('puts a native mob in every biome away from the meadows', () => {
+    for (const [name, profile] of Object.entries(PROFILES)) {
+      if (name === 'grassland') continue;
+      expect(profile.natives.length, `${name} is uninhabited`).toBeGreaterThan(0);
     }
   });
 });

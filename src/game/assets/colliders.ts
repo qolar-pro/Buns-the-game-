@@ -102,6 +102,30 @@ export function idForEntity(
       return 'world/trunk';
     case 'sapling':
       return 'world/sapling';
+    // Biome flora and village buildings map one-to-one onto their art, so the
+    // whole group is a single pass-through rather than a case each.
+    case 'cactus':
+    case 'dead_bush':
+    case 'desert_rock':
+    case 'palm_tree':
+    case 'pine_tree':
+    case 'snow_rock':
+    case 'ice_shard':
+    case 'frost_flower':
+    case 'reeds':
+    case 'lily_pad':
+    case 'swamp_tree':
+    case 'bog_iron':
+    case 'glow_moss':
+    case 'village_house':
+    case 'village_hall':
+    case 'well':
+    case 'market_stall':
+    case 'signpost':
+    case 'lamppost':
+    case 'crate':
+    case 'barrel':
+      return `world/${type}`;
     case 'wheat_crop':
       // Three stages of one crop rather than three entities, so the growth
       // tick that already advances saplings handles it unchanged.

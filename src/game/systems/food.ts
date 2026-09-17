@@ -21,6 +21,9 @@ export const FOODS: Partial<Record<ItemType, FoodValue>> = {
   // Foraged.
   wheat_seeds: { health: 1, hunger: 2 },
   egg: { health: 2, hunger: 5 },
+  // Desert water, essentially. Poor food, but it is food, and it is what the
+  // Dust Flats offer a player who arrives with an empty pack.
+  cactus_flesh: { health: 1, hunger: 9 },
 
   // Raw meat. Edible in a pinch, worth little.
   raw_beef: { health: 2, hunger: 8 },

@@ -9,6 +9,7 @@ import { PLAYER_SIZE } from '../core/config';
 import { soundManager } from '../../../lib/SoundManager';
 import { addFloatingText } from './feedback';
 import { attackDamage, checkHarvest, rollDrop } from './harvesting';
+import { nearestNpc } from './npcs';
 import { rollChest } from './loot';
 import { enemyDrops } from './mobs';
 import { SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
@@ -54,6 +55,17 @@ export function createInteraction({
     const { player } = state;
     const px = player.x + PLAYER_SIZE / 2;
     const py = player.y + PLAYER_SIZE * 0.85;
+
+    // People first. Otherwise walking up to a villager holding an axe — which
+    // is most of the game — greets them with it.
+    const person = nearestNpc(state);
+    if (person) {
+      state.talkingToId = person.id;
+      state.isInventoryOpen = false;
+      soundManager.playOpenContainer();
+      refreshUI();
+      return;
+    }
 
     // Check for enemies first
     let targetEnemy: Enemy | null = null;
@@ -222,6 +234,28 @@ export function createInteraction({
       canBreak = gate.canBreak;
       damage = gate.damage;
       message = gate.message;
+
+      // Beds sleep at night and are ordinary furniture by day, so one button
+      // does both: you can still pick your bed up, just not at bedtime.
+      const hour = state.time / 60;
+      if (res.type === 'bed' && (hour >= 18 || hour < 6)) {
+        const threat = state.enemies.some(
+          (e) => Math.hypot(e.x - player.x, e.y - player.y) < 600,
+        );
+        if (threat) {
+          state.message = { text: 'Something is out there. Not here, not now.', time: Date.now() };
+        } else {
+          // Morning, and the night counts as survived. Sleeping restores less
+          // than a full bar on purpose: a bed should not replace food.
+          state.time = 6 * 60;
+          state.progress.daysSurvived += 1;
+          player.health = Math.min(100, player.health + 35);
+          state.message = { text: 'You sleep until dawn.', time: Date.now() + 3000 };
+          soundManager.playEat();
+        }
+        refreshUI();
+        return;
+      }
 
       if (res.type === 'loot_chest') {
         // Looting is an interaction, not a harvest: one press empties it.

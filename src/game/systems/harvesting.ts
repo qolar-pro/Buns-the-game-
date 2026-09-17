@@ -58,6 +58,16 @@ export const GATES: Partial<Record<EntityType, Gate>> = {
   iron_ore: { family: 'pickaxe', minTier: 2, damage: [3, 6, 10, 99], refusal: PICK_REFUSAL('a Stone') },
   titanium_ore: { family: 'pickaxe', minTier: 3, damage: [4, 9, 99], refusal: PICK_REFUSAL('an Iron') },
 
+  // Biome materials. Bog iron is the fen's reward for getting there early: a
+  // stone pickaxe opens it, where surface iron ore wants the same but is rarer.
+  bog_iron: { family: 'pickaxe', minTier: 2, damage: [4, 7, 11, 99], refusal: PICK_REFUSAL('a Stone') },
+  desert_rock: { family: 'pickaxe', minTier: 1, damage: [3, 4.5, 8, 12, 99], refusal: 'Requires a Pickaxe' },
+  snow_rock: { family: 'pickaxe', minTier: 1, damage: [3, 4.5, 8, 12, 99], refusal: 'Requires a Pickaxe' },
+  ice_shard: { family: 'pickaxe', minTier: 1, damage: [4, 6, 10, 14, 99], refusal: 'Requires a Pickaxe' },
+  pine_tree: { family: 'axe', minTier: 1, damage: [3, 4.5, 8, 12], refusal: 'Requires an Axe' },
+  swamp_tree: { family: 'axe', minTier: 1, damage: [3, 4.5, 8, 12], refusal: 'Requires an Axe' },
+  palm_tree: { family: 'axe', minTier: 1, damage: [3, 4.5, 8, 12], refusal: 'Requires an Axe' },
+
   // The dungeon gate. Rubble is what seals a collapsed shaft, and iron is the
   // tier that opens the game up.
   rubble: { family: 'pickaxe', minTier: 3, damage: [6, 10, 99], refusal: PICK_REFUSAL('an Iron') },
@@ -160,6 +170,27 @@ export const HARVEST_DROPS: Partial<Record<EntityType, DropRule>> = {
     unripe: { drops: [{ type: 'wheat_seeds', weight: 1 }], min: 1, max: 1 },
   },
 
+  // --- biome materials --------------------------------------------------
+  // The desert's gate: fiber is the only route to rope, and rope is the only
+  // bowstring in the game.
+  cactus: { drops: [{ type: 'plant_fiber', weight: 3 }, { type: 'cactus_flesh', weight: 2 }], min: 1, max: 3 },
+  dead_bush: one('plant_fiber', 1, 2),
+  desert_rock: { drops: [{ type: 'stone', weight: 3 }, { type: 'sand', weight: 2 }], min: 1, max: 3 },
+  palm_tree: { drops: [{ type: 'wood', weight: 1 }], min: 1, max: 1, perScale: 4 },
+
+  pine_tree: { drops: [{ type: 'wood', weight: 1 }], min: 1, max: 1, perScale: 5 },
+  snow_rock: one('stone', 2, 3),
+  // Frost crystals are the fur set's bonus material.
+  ice_shard: { drops: [{ type: 'frost_crystal', weight: 2 }, { type: 'stone', weight: 1 }], min: 1, max: 2 },
+  frost_flower: one('frost_crystal', 1, 1),
+
+  // The fen: reeds are arrows in bulk, bog iron is a second route to metal.
+  reeds: one('reed_bundle', 1, 3),
+  swamp_tree: { drops: [{ type: 'wood', weight: 1 }], min: 1, max: 1, perScale: 3 },
+  lily_pad: one('glow_moss', 1, 1),
+  bog_iron: one('iron_ore', 2, 3),
+  glow_moss: one('glow_moss', 1, 2),
+
   // Placed things come back, so a misplaced wall is not a wasted wall.
   torch: one('torch'),
   workbench: one('workbench'),
@@ -247,6 +278,19 @@ const HITS: Partial<Record<EntityType, number>> = {
   door: 2,
   loot_chest: 1,
   wheat_crop: 1,
+  cactus: 3,
+  dead_bush: 1,
+  desert_rock: 3,
+  palm_tree: 6,
+  pine_tree: 8,
+  snow_rock: 3,
+  ice_shard: 2,
+  frost_flower: 1,
+  reeds: 1,
+  lily_pad: 1,
+  swamp_tree: 6,
+  bog_iron: 4,
+  glow_moss: 1,
 };
 
 /**

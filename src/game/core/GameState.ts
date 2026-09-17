@@ -41,6 +41,10 @@ export function createGameState(): GameState {
       footstepTimer: 0,
     },
     isPaused: false,
+    npcs: [],
+    villagesFound: [],
+    talkingToId: null,
+    requestsDone: [],
     level: { kind: 'surface' },
     progress: {
       daysSurvived: 0,

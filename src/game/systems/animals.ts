@@ -6,6 +6,7 @@
  */
 import { soundManager } from '../../../lib/SoundManager';
 import { MOBS, enemyDrops } from './mobs';
+import { inVillage, updateNpcs } from './npcs';
 import type { EnemyKind, GameState, ItemType } from '../core/types';
 
 export interface CreatureDeps {
@@ -98,6 +99,7 @@ export function updateCreatures(
     }
   });
 
+  updateNpcs(state, dt);
   updateEnemies(state, dt, now, { spawnEnemy, spawnItem });
 }
 
@@ -143,7 +145,9 @@ function updateEnemies(
   const underground = state.level.kind === 'dungeon';
 
   // Nocturnal spawning, surface only — the dungeon ships with its population.
-  if (!underground && isNight && Math.random() < 0.005 * dt) {
+  // A settlement is the one place on the map that stays quiet: that is what
+  // makes it somewhere to come back to rather than another patch of grass.
+  if (!underground && isNight && !inVillage(state) && Math.random() < 0.005 * dt) {
     const angle = Math.random() * Math.PI * 2;
     const sx = player.x + Math.cos(angle) * 600;
     const sy = player.y + Math.sin(angle) * 600;

@@ -18,7 +18,7 @@ import { evaluateQuests } from '../systems/quests';
 import { HOTBAR_SLOTS, MAX_HUNGER } from '../core/config';
 import type { ColliderShape } from '../../../lib/SpriteCollider';
 import type {
-  Animal, AnimalType, Enemy, EntityType, GameState, Particle,
+  Animal, AnimalType, Enemy, EntityType, GameState, Npc, Particle,
   RenderEntity, Resource,
 } from '../core/types';
 
@@ -66,6 +66,7 @@ export interface RendererDeps {
     hasLabelCol: boolean; hasLabelRow: boolean; labelHeight: number;
   };
   drawAnimal: (ctx: CanvasRenderingContext2D, animal: Animal) => void;
+  drawNpc: (ctx: CanvasRenderingContext2D, npc: Npc) => void;
   drawEnemy: (ctx: CanvasRenderingContext2D, enemy: Enemy) => void;
 }
 
@@ -76,7 +77,7 @@ const PLAYER_FRAME = FRAMES['characters/player'];
 export function createRenderer({
   state, sprites, colliders, chunkCanvases, anim, keys, canvas, view,
   debugColliders, renderChunkTerrain, getResourceDimensions, getAnimalSpriteInfo,
-  drawAnimal, drawEnemy,
+  drawAnimal, drawEnemy, drawNpc,
 }: RendererDeps) {
   const draw = () => {
     const el = canvas();
@@ -162,6 +163,13 @@ export function createRenderer({
              p.y - 50 < state.camera.y + state.height;
     });
 
+    const visibleNpcs = state.npcs.filter(n => {
+      return n.x + 100 > state.camera.x &&
+             n.x - 100 < state.camera.x + state.width &&
+             n.y + 120 > state.camera.y &&
+             n.y - 120 < state.camera.y + state.height;
+    });
+
     const visibleEnemies = state.enemies.filter(e => {
       return e.x + 100 > state.camera.x && 
              e.x - 100 < state.camera.x + state.width &&
@@ -189,6 +197,9 @@ export function createRenderer({
       ...visibleItems.map(i => ({ ...i, sortY: i.y + 16, isItem: true })),
       ...visibleAnimals.map(a => ({ ...a, sortY: a.y + 20, isAnimal: true })),
       ...visibleEnemies.map(e => ({ ...e, sortY: e.y + 20, isEnemy: true })),
+      // `type` carries the role so this entry has the same shape as every other
+      // one in the sort list; without it the union loses the field entirely.
+      ...visibleNpcs.map(n => ({ ...n, type: n.role, sortY: n.y, isNpc: true })),
       ...visibleParticles.map(p => ({ ...p, isParticle: true, sortY: p.y })),
       { ...state.player, type: 'player', sortY: state.player.y + PLAYER_SIZE * 0.9 }
     ];
@@ -235,6 +246,8 @@ export function createRenderer({
         // Item on ground
         const hover = Math.sin(anim.value * 2 + e.x) * 3;
         assets.draw(ctx, `items/${e.type}`, e.x - 20, e.y - 20 + hover, 40, 40);
+      } else if (e.isNpc) {
+        drawNpc(ctx, ent as unknown as Npc);
       } else if (e.isEnemy) {
         drawEnemy(ctx, ent as Enemy);
       } else if (e.isAnimal) {

@@ -17,6 +17,7 @@ import type { GameState } from '@/src/game/core/types';
 import { AdminPanel } from '@/components/ui/AdminPanel';
 import { Hud } from '@/components/ui/Hud';
 import { InventoryOverlay } from '@/components/ui/InventoryOverlay';
+import { TradePanel } from '@/components/ui/TradePanel';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { PauseMenu } from '@/components/ui/PauseMenu';
 import { RotatePrompt } from '@/components/ui/RotatePrompt';
@@ -218,6 +219,24 @@ export default function Game({ onExitToMenu, loadedSaveId }: GameProps) {
         debugColliders={debugColliders}
         setDebugColliders={setDebugColliders}
       />
+
+      {/* Talking to a villager */}
+      <AnimatePresence>
+        {stateRef.current.talkingToId && (() => {
+          const npc = stateRef.current.npcs.find((n) => n.id === stateRef.current.talkingToId);
+          return npc ? (
+            <TradePanel
+              state={stateRef.current}
+              npc={npc}
+              refreshUI={refreshUI}
+              onClose={() => {
+                stateRef.current.talkingToId = null;
+                refreshUI();
+              }}
+            />
+          ) : null;
+        })()}
+      </AnimatePresence>
 
       {/* Inventory Overlay */}
       <AnimatePresence>

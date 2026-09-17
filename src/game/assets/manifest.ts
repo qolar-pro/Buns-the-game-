@@ -93,6 +93,33 @@ export const META: Record<string, AssetMeta> = {
   'world/door': solid(110, 150, 52, 20),
   'world/anvil': solid(110, 110, 38, 16),
   // Crops are walked through, not around.
+  // --- biomes -----------------------------------------------------------
+  // Desert
+  'world/cactus': solid(120, 180, 34, 18),
+  'world/dead_bush': pickup(90, 90, 22, 11),
+  'world/desert_rock': solid(100, 100, 40, 18),
+  'world/palm_tree': solid(150, 225, 26, 14),
+  // Snow
+  'world/pine_tree': solid(150, 225, 30, 16),
+  'world/snow_rock': solid(100, 100, 40, 18),
+  'world/ice_shard': solid(95, 95, 30, 14),
+  'world/frost_flower': pickup(60, 60, 12, 6),
+  // Swamp
+  'world/reeds': pickup(105, 105, 24, 12),
+  'world/lily_pad': { anchor: { x: 0.5, y: 1 }, worldSize: { w: 100, h: 100 }, collider: { kind: 'none' }, layer: 'NONE' },
+  'world/swamp_tree': solid(145, 218, 28, 15),
+  'world/bog_iron': solid(100, 100, 36, 17),
+  'world/glow_moss': pickup(70, 70, 16, 8),
+  // Villages
+  'world/village_house': solid(230, 345, 100, 44),
+  'world/village_hall': solid(280, 420, 124, 52),
+  'world/well': solid(120, 120, 46, 22),
+  'world/market_stall': solid(150, 150, 60, 26),
+  'world/signpost': solid(90, 90, 16, 9),
+  'world/lamppost': solid(80, 120, 14, 8),
+  'world/crate': solid(95, 95, 36, 17),
+  'world/barrel': solid(85, 85, 30, 15),
+
   'world/crop_seedling': pickup(55, 55, 10, 5),
   'world/crop_growing': pickup(86, 86, 18, 9),
   'world/crop_wheat': pickup(100, 100, 22, 11),

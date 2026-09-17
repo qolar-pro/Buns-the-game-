@@ -7,7 +7,7 @@
  * sheet and drew nothing.
  */
 import { FRAMES } from '../assets/frames';
-import type { Animal, AnimalType, Enemy, EnemyKind, GameState } from '../core/types';
+import type { Animal, AnimalType, Enemy, EnemyKind, GameState, Npc, NpcRole } from '../core/types';
 
 type Sprite = HTMLCanvasElement;
 
@@ -20,6 +20,8 @@ export interface EntityRenderDeps {
     chicken: () => Sprite | null;
     /** Mob sheets, by kind. Kinds without art fall back to the drawn shapes. */
     mobs: Partial<Record<EnemyKind, () => Sprite | null>>;
+    /** Villager sheets, by role. */
+    people: Partial<Record<NpcRole, () => Sprite | null>>;
   };
 }
 
@@ -171,6 +173,41 @@ export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
     return true;
   };
 
+  /**
+   * Draw a villager.
+   *
+   * Same four-row sheet convention as animals; people face all four ways, so
+   * unlike mobs the row really does come from their facing. A person with no
+   * art gets a plain silhouette rather than nothing, so a village is never an
+   * empty street of buildings.
+   */
+  const drawNpc = (ctx: CanvasRenderingContext2D, npc: Npc) => {
+    ctx.save();
+    ctx.translate(npc.x, npc.y);
+
+    const img = sprites.people[npc.role]?.() ?? null;
+    const size = npc.role === 'elder' ? 120 : 115;
+
+    if (img) {
+      const sheet = (FRAMES as Record<string, { grid?: { cols: number; rows: number } }>)[`characters/${npc.role}`];
+      const rows = sheet?.grid?.rows ?? 4;
+      const cols = sheet?.grid?.cols ?? 3;
+      const sw = img.width / cols;
+      const sh = img.height / rows;
+      const ROW_FOR_FACING = { down: 0, left: 1, right: 2, up: 3 } as const;
+      const frameY = ROW_FOR_FACING[npc.facing];
+      const frameX = npc.isMoving ? [1, 0, 1, 2][Math.floor(npc.animFrame % 4)] : 1;
+      ctx.drawImage(img, frameX * sw, frameY * sh, sw, sh, -size / 2, -size, size, size);
+    } else {
+      ctx.fillStyle = npc.role === 'elder' ? '#8a8fa8' : '#7c4d23';
+      ctx.fillRect(-16, -56, 32, 56);
+      ctx.fillStyle = '#f0d8b0';
+      ctx.fillRect(-11, -74, 22, 20);
+    }
+
+    ctx.restore();
+  };
+
   const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy) => {
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
@@ -252,7 +289,7 @@ export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
       ctx.restore();
   };
 
-  return { getAnimalSpriteInfo, drawAnimal, drawEnemy };
+  return { getAnimalSpriteInfo, drawAnimal, drawEnemy, drawNpc };
 }
 
 export type EntityRenderer = ReturnType<typeof createEntityRenderer>;
