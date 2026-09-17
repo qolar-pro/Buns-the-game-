@@ -1,3 +1,4 @@
+import { debug, debugError } from '@/lib/debug';
 /**
  * SpriteCollider.ts
  * Universal system for generating optimized hitboxes and interaction shapes from PNG files.
@@ -297,9 +298,9 @@ export class SpriteColliderGenerator {
       try {
         const shape = await this.generateFromImage(img, asset.type, asset.layer);
         results.set(asset.url, shape);
-        console.log(`Generated collider for ${asset.url}: ${shape.points.length} vertices`);
+        debug(`Generated collider for ${asset.url}: ${shape.points.length} vertices`);
       } catch (err) {
-        console.error(`Failed to process ${asset.url}:`, err);
+        debugError(`Failed to process ${asset.url}:`, err);
       }
     }
 

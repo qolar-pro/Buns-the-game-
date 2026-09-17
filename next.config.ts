@@ -1,33 +1,19 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  /**
+   * Every route is static, so the game can ship either as a Next server
+   * (Vercel, zero config) or as plain files behind any static host.
+   * `STATIC_EXPORT=1 npm run build` produces the latter in `out/`.
+   */
+  ...(process.env.STATIC_EXPORT === '1' ? { output: 'export' as const } : {}),
   eslint: {
-    ignoreDuringBuilds: true,
+    // Lint is part of the build. Do not turn this off to get a green build.
+    ignoreDuringBuilds: false,
   },
   typescript: {
     ignoreBuildErrors: false,
-  },
-  // Allow access to remote image placeholder.
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**', // This allows any path under the hostname
-      },
-    ],
-  },
-  webpack: (config, {dev}) => {
-    // HMR is disabled in AI Studio via DISABLE_HMR env var.
-    // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-    if (dev && process.env.DISABLE_HMR === 'true') {
-      config.watchOptions = {
-        ignored: /.*/,
-      };
-    }
-    return config;
   },
 };
 

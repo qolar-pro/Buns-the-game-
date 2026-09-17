@@ -1,0 +1,20 @@
+
+=== ASSET AUDIT ===
+referenced: 0 static + 2 dynamic pattern(s)
+on disk:    5 image(s) in public/
+
+MISSING (referenced but absent) — 0
+  none
+
+UNUSED (on disk but unreferenced) — 0
+  none
+
+DYNAMIC patterns (verify range coverage by hand)
+  atlas "${name}" failed to load from ${ATLAS_PATH}/${name}.png  -> 0 match(es) on disk
+      src/game/assets/AssetRegistry.ts:48
+  ${ATLAS_PATH}/${name}.png  -> 5 match(es) on disk
+      src/game/assets/AssetRegistry.ts:49
+
+TOTAL art payload in public/: 1.09 MB
+Budget: 2.50 MB — PASS
+

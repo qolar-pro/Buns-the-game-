@@ -1,0 +1,397 @@
+/**
+ * World generation and spawning.
+ *
+ * Moved out of the monolithic effect in components/Game.tsx. Pure TypeScript:
+ * given state it mutates state and nothing else — no React, no DOM, no canvas —
+ * which is what makes world generation testable without a browser.
+ *
+ * `getResourceDimensions` is injected rather than imported because draw sizes
+ * come from the asset manifest, which is a rendering concern.
+ */
+import { CHUNK_SIZE } from '../core/config';
+import { fbm, hash } from './noise';
+import { PROFILES, biomeAt, biomeStrength } from './biomes';
+import { generateVillage, hasVillage } from './village';
+import { MOBS } from '../systems/mobs';
+import { hitsToBreak } from '../systems/harvesting';
+import type { AnimalType, EnemyKind, EntityType, GameState, ItemType } from '../core/types';
+
+/** Draw dimensions for an entity, supplied by the renderer. */
+export type DimensionFn = (
+  type: EntityType,
+  scale: number,
+  growthStage?: number,
+  rockIndex?: number,
+) => { w: number; h: number };
+
+export interface WorldDeps {
+  state: GameState;
+  getResourceDimensions: DimensionFn;
+}
+
+/**
+ * Build the world generation functions against a given state.
+ *
+ * A factory rather than free functions taking `state` as a first argument: the
+ * bodies moved across unchanged that way, which keeps this a move rather than a
+ * rewrite. They call each other, so they need to share one closure.
+ */
+export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
+  /**
+   * Place one entity.
+   *
+   * The type is required. It used to be optional, falling back to a random
+   * table — and because every caller passes a type, that table was dead code.
+   * Ore and collapsed shafts were listed in it and therefore never spawned at
+   * all, which quietly made the game unfinishable. A required type means a new
+   * material has to be given a real spawn site to exist.
+   */
+  const spawnResource = (forceType: EntityType, forceX?: number, forceY?: number, chunkX?: number, chunkY?: number, rng?: () => number) => {
+    const random = rng || Math.random;
+    const type: EntityType = forceType;
+    const growthStage = type === 'sapling' ? 0 : 2;
+
+    const isPlant = type !== 'rock' && type !== 'trunk' && type !== 'coal_ore';
+    const rockIndex = (type === 'rock' || type === 'coal_ore') ? Math.floor(random() * 9) : undefined;
+    // Use fixed scale for forced spawns (placement) to ensure predictable size/position
+    const scale = forceX !== undefined ? 1.0 : (isPlant ? 0.8 + random() * 0.4 : 0.8 + random() * 0.2);
+    const dims = getResourceDimensions(type, scale, growthStage, rockIndex);
+    const sizeW = dims.w;
+    const sizeH = dims.h;
+  
+    let x = forceX ?? 0;
+    let y = forceY ?? 0;
+
+    if (forceX === undefined || forceY === undefined) {
+      if (chunkX !== undefined && chunkY !== undefined) {
+        x = chunkX * CHUNK_SIZE + random() * (CHUNK_SIZE - sizeW);
+        y = chunkY * CHUNK_SIZE + random() * (CHUNK_SIZE - sizeH);
+      } else {
+        x = random() * (state.width - sizeW);
+        y = random() * (state.height - sizeH);
+      }
+    }
+
+    // Avoid tight overlapping
+    const cx = Math.floor(x / CHUNK_SIZE);
+    const cy = Math.floor(y / CHUNK_SIZE);
+  
+    let tooClose = false;
+
+    // Safe zone around spawn point (0, 0)
+    const spawnSafeZone = 150;
+    const distToSpawn = Math.sqrt(Math.pow(x + sizeW/2 - 64, 2) + Math.pow(y + sizeH/2 - 108, 2));
+    if (distToSpawn < spawnSafeZone) {
+      tooClose = true;
+    }
+
+    if (!tooClose) {
+      // Only check current and adjacent chunks for overlapping
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+        const checkChunkId = `${cx + dx},${cy + dy}`;
+        const chunkResources = state.resources.get(checkChunkId);
+        if (chunkResources) {
+          for (const res of chunkResources) {
+            const resDims = getResourceDimensions(res.type, res.scale, res.growthStage, res.rockIndex);
+            // Stricter distance check to prevent overlapping canopies and rocks
+            const dist = Math.sqrt(Math.pow(x + sizeW/2 - (res.x + resDims.w/2), 2) + Math.pow(y + sizeH/2 - (res.y + resDims.h/2), 2));
+            // Using 0.6 to ensure a safe buffer between objects (0.5 would be touching)
+            const minSafeDist = (sizeW + resDims.w) * 0.6; 
+            if (dist < minSafeDist) {
+              tooClose = true;
+              break;
+            }
+          }
+        }
+        if (tooClose) break;
+      }
+      if (tooClose) break;
+    }
+  }
+
+    if (tooClose && !forceType) return false;
+
+    const chunkId = `${cx},${cy}`;
+    if (!state.resources.has(chunkId)) {
+      state.resources.set(chunkId, []);
+    }
+
+    state.resources.get(chunkId)!.push({
+      id: `${type}-${Date.now()}-${Math.random()}`,
+      x,
+      y,
+      type,
+      hits: 0,
+      maxHits: hitsToBreak(type, growthStage),
+      scale,
+      opacity: forceType ? 1 : 0,
+      rockIndex,
+      growthStage: (type === 'sapling' || type === 'tree') ? growthStage : undefined,
+      growthTimer: (type === 'sapling' || type === 'tree') ? 0 : undefined,
+    });
+    return true;
+  };
+
+  const spawnAnimal = (x: number, y: number, type: AnimalType) => {
+    const id = `animal-${type}-${Date.now()}-${Math.random()}`;
+    const maxHealth = type === 'cow' ? 15 : type === 'pig' ? 10 : type === 'sheep' ? 8 : 5;
+    state.animals.push({
+      id,
+      type,
+      x,
+      y,
+      health: maxHealth,
+      maxHealth,
+      state: 'idle',
+      targetX: x,
+      targetY: y,
+      timer: Math.random() * 2000,
+      facing: 'right',
+      lastHitTime: 0,
+      eggTimer: type === 'chicken' ? Math.random() * 10000 + 10000 : undefined,
+      animFrame: 0,
+      isMoving: false
+    });
+  };
+
+  const dropLoot = (type: AnimalType, x: number, y: number) => {
+    const items: { type: ItemType, count: number }[] = [];
+    if (type === 'cow') {
+      items.push({ type: 'raw_beef', count: Math.floor(Math.random() * 3) + 1 });
+      if (Math.random() < 0.6) items.push({ type: 'leather', count: 1 });
+    } else if (type === 'pig') {
+      items.push({ type: 'raw_pork', count: Math.floor(Math.random() * 2) + 1 });
+    } else if (type === 'sheep') {
+      items.push({ type: 'mutton', count: 1 });
+      if (Math.random() < 0.8) items.push({ type: 'wool', count: Math.floor(Math.random() * 2) + 1 });
+    } else if (type === 'chicken') {
+      items.push({ type: 'raw_chicken', count: 1 });
+      if (Math.random() < 0.5) items.push({ type: 'feather', count: Math.floor(Math.random() * 3) + 1 });
+    }
+
+    items.forEach(loot => {
+      for (let i = 0; i < loot.count; i++) {
+        state.items.push({
+          id: `loot-${Date.now()}-${Math.random()}`,
+          x: x + (Math.random() - 0.5) * 40,
+          y: y + (Math.random() - 0.5) * 40,
+          type: loot.type
+        });
+      }
+    });
+  };
+
+  const spawnChunkResources = (cx: number, cy: number) => {
+    const chunkId = `${cx},${cy}`;
+    if (state.generatedChunks.has(chunkId)) return;
+    state.generatedChunks.add(chunkId);
+
+    // Deterministic RNG for this chunk
+    let seed = hash(cx, cy);
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed - 1) / 2147483646;
+    };
+
+    // Cohesive Biome Noise (matches terrain scale)
+    const terrainVal = fbm(cx * CHUNK_SIZE * 0.0006, cy * CHUNK_SIZE * 0.0006, 3);
+
+    const biome = biomeAt(cx, cy);
+
+    // A village replaces whatever would have grown here. Generated whole rather
+    // than scattered, so the plan survives and the streets stay clear.
+    if (hasVillage(cx, cy)) {
+      const village = generateVillage(cx, cy);
+      state.resources.set(chunkId, village.buildings);
+      for (const resident of village.residents) {
+        if (!state.npcs.some((n) => n.id === resident.id)) state.npcs.push(resident);
+      }
+      if (!state.villagesFound.includes(village.id)) state.villagesFound.push(village.id);
+      return;
+    }
+  
+    // Helper to try spawning multiple times if it fails due to overlap
+    const trySpawn = (type: EntityType, fx?: number, fy?: number) => {
+      // More attempts for better distribution without overlapping
+      for (let attempt = 0; attempt < 15; attempt++) {
+        if (spawnResource(type, fx, fy, cx, cy, random)) return true;
+      }
+      return false;
+    };
+
+    // A biome other than grassland brings its own table, and only its own.
+    // Mixing in the meadow scatter made the desert look like a meadow with
+    // cacti in it, which is not a desert.
+    if (biome !== 'grassland') {
+      const profile = PROFILES[biome];
+      const strength = biomeStrength(cx, cy);
+      for (const spawn of profile.spawns) {
+        // Fractional counts: the whole part always spawns, the remainder is a
+        // chance. Scaled by how deep in the biome the chunk sits, so the
+        // border thins out rather than stopping dead.
+        const expected = spawn.per * (0.5 + strength * 0.5);
+        let count = Math.floor(expected);
+        if (random() < expected - count) count += 1;
+        for (let i = 0; i < count; i++) trySpawn(spawn.type);
+      }
+
+      // A little ground cover everywhere, so nowhere is bare canvas.
+      const scatter = 3 + Math.floor(random() * 4);
+      for (let i = 0; i < scatter; i++) trySpawn(biome === 'snow' ? 'small_rock' : 'grass');
+
+      // Metal still appears underfoot in every biome; ore districts are their
+      // own field and do not care about climate.
+      const metalHere = fbm(cx * 0.35 + 3100, cy * 0.35 + 3100, 2);
+      if (metalHere > 0.50) {
+        if (random() < 0.5) trySpawn('copper_ore');
+        if (random() < 0.4) trySpawn('iron_ore');
+      }
+      const shaftHere = fbm(cx * 0.8 + 7700, cy * 0.8 + 7700, 2);
+      if (shaftHere > 0.55 && random() < 0.6) trySpawn('dungeon_entrance');
+
+      // Natives, placed as resting spawns so the biome is inhabited on arrival.
+      for (const native of profile.natives) {
+        if (random() < native.per) {
+          const nx = cx * CHUNK_SIZE + random() * CHUNK_SIZE;
+          const ny = cy * CHUNK_SIZE + random() * CHUNK_SIZE;
+          spawnEnemy(native.kind, nx, ny);
+        }
+      }
+      return;
+    }
+
+    // 1. Lush Grass Biome (Drastically reduced)
+    if (terrainVal < 0.52) {
+      const forestVal = fbm(cx * 0.3 + 200, cy * 0.3 + 200, 2);
+      if (forestVal > 0.85) { // Much higher threshold
+        const count = 1 + Math.floor(random() * 2);
+        for (let i = 0; i < count; i++) trySpawn('tree');
+      } else if (forestVal > 0.7) {
+        const count = 1;
+        for (let i = 0; i < count; i++) trySpawn('tree');
+      }
+    }
+
+    // 2. Dirt/Quarry Biome (Drastically reduced)
+    if (terrainVal >= 0.45) {
+      const rockVal = fbm(cx * 0.4 + 500, cy * 0.4 + 500, 2);
+      if (rockVal > 0.85) {
+        const count = 1 + Math.floor(random() * 2);
+        for (let i = 0; i < count; i++) {
+          const type = random() < 0.4 ? 'coal_ore' : 'rock';
+          trySpawn(type);
+        }
+      }
+    }
+
+    // 2b. Metal. Its own noise field, so ore comes in districts a player can
+    //     learn and come back to rather than being sprinkled evenly. Copper is
+    //     the common one; iron is what gates the dungeon, so it is rarer but
+    //     never absent from a metal district.
+    // Thresholds are percentiles of this field measured over 3,721 chunks, not
+    // guesses: 0.50 is its ~78th percentile, so about a fifth of chunks carry
+    // metal. Guessed thresholds are how the old quarry branch ended up firing
+    // almost never.
+    const metalVal = fbm(cx * 0.35 + 3100, cy * 0.35 + 3100, 2);
+    if (metalVal > 0.50) {
+      const richness = (metalVal - 0.50) / 0.22;
+      const copper = random() < 0.45 + richness * 0.4 ? 1 : 0;
+      for (let i = 0; i < copper; i++) trySpawn('copper_ore');
+      if (random() < 0.3 + richness * 0.45) trySpawn('iron_ore');
+    }
+
+    // 2c. Collapsed shafts: the only way underground, so they must be findable
+    //     without being everywhere. Roughly one per dozen chunks — a few
+    //     minutes of walking — and sealed with rubble until the player has iron.
+    const shaftVal = fbm(cx * 0.8 + 7700, cy * 0.8 + 7700, 2);
+    if (shaftVal > 0.55 && random() < 0.6) {
+      trySpawn('dungeon_entrance');
+    }
+
+    // 3. General Vegetation (Bushes - Drastically reduced)
+    const bushVal = fbm(cx * 0.5 + 1000, cy * 0.5 + 1000, 2);
+    if (bushVal > 0.85) {
+      const count = 1 + Math.floor(random() * 2);
+      for (let i = 0; i < count; i++) trySpawn('bush');
+    }
+
+    // 4. Global Scattered Resources (Drastically reduced)
+    const scatterCount = 1 + Math.floor(random() * 2);
+    for (let i = 0; i < scatterCount; i++) {
+      const r = random();
+      if (r < 0.3) {
+        trySpawn('tree');
+      } else if (r < 0.6) {
+        trySpawn('rock');
+      } else if (r < 0.8) {
+        trySpawn('coal_ore');
+      } else {
+        trySpawn('bush');
+      }
+    }
+
+    // 5. Scattered Branches, Small Rocks, and Grass (Significantly reduced)
+    const branchCount = 2 + Math.floor(random() * 3);
+    for (let i = 0; i < branchCount; i++) trySpawn('branch');
+
+    const smallRockCount = 2 + Math.floor(random() * 2);
+    for (let i = 0; i < smallRockCount; i++) trySpawn('small_rock');
+
+    const grassCount = 15 + Math.floor(random() * 10);
+    for (let i = 0; i < grassCount; i++) trySpawn('grass');
+
+    // 6. Spawn Animals (Rarely)
+    if (random() < 0.3) { // 30% chance per chunk to spawn a group
+      const animalCount = 1; // Changed from 1 + Math.floor(random() * 3) to avoid confusion
+      const types: AnimalType[] = ['cow', 'pig', 'sheep', 'chicken'];
+      const type = types[Math.floor(random() * types.length)];
+      const groupX = cx * CHUNK_SIZE + random() * (CHUNK_SIZE - 100);
+      const groupY = cy * CHUNK_SIZE + random() * (CHUNK_SIZE - 100);
+    
+      for (let i = 0; i < animalCount; i++) {
+        spawnAnimal(groupX + (random() - 0.5) * 100, groupY + (random() - 0.5) * 100, type);
+      }
+    }
+  };
+
+  const spawnItem = (type: ItemType, x: number, y: number, count: number) => {
+    for (let i = 0; i < count; i++) {
+      state.items.push({
+        id: `item-${Date.now()}-${Math.random()}`,
+        x: x + (Math.random() - 0.5) * 40,
+        y: y + (Math.random() - 0.5) * 40,
+        type,
+      });
+    }
+  };
+
+  const spawnEnemy = (type: EnemyKind, x: number, y: number, tier: number = 1) => {
+    const profile = MOBS[type];
+    // Shades scale with the hour via `tier`; everything else uses its profile.
+    const health = type === 'static' ? profile.health * tier : profile.health;
+    const damage = type === 'static' ? profile.damage * tier : profile.damage;
+
+    state.enemies.push({
+      id: `enemy-${Date.now()}-${Math.random()}`,
+      type,
+      x,
+      y,
+      health,
+      maxHealth: health,
+      damage,
+      speed: profile.speed,
+      targetX: x,
+      targetY: y,
+      state: 'idle',
+      timer: 0,
+      facing: 'left',
+      lastHitTime: 0,
+      tier,
+    });
+  };
+
+  return { spawnResource, spawnAnimal, dropLoot, spawnChunkResources, spawnItem, spawnEnemy };
+}
+
+export type Worldgen = ReturnType<typeof createWorldgen>;

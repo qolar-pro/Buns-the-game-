@@ -1,5 +1,152 @@
 # Survivors Juicy Buns - Change Log
 
+## [Version 0.4.0] - The world (2026-09-17)
+
+Biomes to travel to, villages to spend loot in, bows to fight with, and a second
+ending to choose instead of the first.
+
+### Added
+- **Three surface biomes** beside the meadows — the Dust Flats, the White Waste
+  and the Sunken Fen — each with its own terrain, flora and native mob, and each
+  gating one material the combat tree needs: plant fibre for bows, thick fur for
+  the fur armour set, reeds for arrows in bulk. Biome thresholds were chosen by
+  sweeping every combination against 6,561 sampled chunks, not guessed.
+- **Villages**: a fixed street plan, four residents, roughly one every
+  twenty-five chunks, never in the fen. Barter trade by role, two stable
+  requests per settlement, and a safe haven where nothing hostile spawns.
+- **Sleeping**: a bed at night takes you to dawn, with nothing dangerous within
+  600 units. Beds previously did nothing but break.
+- **Ranged combat**: bows and crossbows firing simulated arrows that travel, can
+  miss, and are mostly recoverable. Bound to the action button, so touch shoots
+  too. The sentinel fights at range now, as it was always meant to.
+- **Armour that works**: four sets with real defence values, weight, and a
+  matched-set bonus. Shields block while held.
+- **A second ending.** The signal core powers the antenna or the village
+  generator, and there is one core. RESCUED, or SETTLED. Neither is the good
+  ending; the summary underneath is identical, because the run was.
+- 77 new art assets (248 total), 21 new recipes (63 total), ~35 new items.
+- `scripts/world-test.mjs`: 24 browser checks over biomes, villages, trade,
+  ranged combat, armour, sleeping and the second ending. Nothing is injected —
+  every check walks the generated world.
+
+### Fixed
+- **Iron ore, copper ore and collapsed shafts never spawned.** They were listed
+  in a random table that no caller reached, so a census of 225 chunks found zero
+  of each: no iron, no dungeon, no ending. The game could not be finished.
+- **Only leather armour protected anybody.** Chainmail, fur and a full titanium
+  suit all gave zero defence, in two separate copies of the same chain.
+- The bed could never be used, only chopped up.
+
+### Changed
+- Art budget raised from 2.50 MB to 3.50 MB. The asset count went from 113 to
+  248; palette quantisation would fit the whole set in 0.9 MB but shifts 3.5% of
+  the character atlas by more than 24/255, which is visible banding on every
+  sprite. Cheaper art is not smaller art. Actual payload: 2.61 MB.
+- `spawnResource` requires a type, so content cannot be added to a dead table
+  again. Armour, biome flora, mob profiles, trade stock, village requests and
+  placement rules are all data tables.
+
+## [Version 0.3.0] - Content (2026-09-17)
+
+The game now has an arc: stranded, dig, fight, broadcast, rescued. Nothing from
+v0.2.0 was removed.
+
+### Added
+- **An ending.** Craft the antenna frame, restore it with copper wiring, install
+  the signal core taken from the Warden, and broadcast. A summary screen closes
+  the run with days survived, depth reached, chests looted and mobs defeated.
+- **A quest log**: 13 ordered objectives that always name the next concrete
+  action, derived from game state rather than handed in, and sticky so spending
+  an item never un-completes a step.
+- **Dungeons**: three hand-bounded levels of rooms and corridors, generated from
+  the world seed, with chests, ore in the walls, braziers, stairs down and a way
+  out. Rooms are joined in sequence, so a level can never strand a room.
+- **Loot**: weighted per-depth chest tables with four uniques — the lantern, the
+  prospector's pick, the relic blade and the Warden's key — each of which can
+  only be found once per run.
+- **Four mobs**: husk, crawler, sentinel and the Warden, all driven by one
+  profile table and drawn from generated sprite sheets.
+- **Two ores**: copper and titanium, with ingots, wiring and a titanium tool
+  tier behind an anvil.
+- **Building**: walls, floors and doors that snap to a grid so a row of them is
+  actually a wall, plus a placeable anvil. Everything placed breaks back into
+  the item that made it. Bound to `F` and to a `PUT` button on touch.
+- **Farming**: wheat seeds plant into a crop that ripens into wheat, which is
+  what bread and meat pies are made of.
+- **The survivor's logs**: six story fragments found in chests, read on pickup.
+- 18 more recipes (43 total), ~30 more items, and 58 new art assets.
+- `scripts/loop-test.mjs`: a 19-check browser run of the entire progression,
+  surface to shaft to Warden to broadcast.
+- `reachability.test.ts`: proves every recipe ingredient can actually be
+  obtained from something in the world. Written because three separate content
+  updates had each shipped an item nothing produced.
+
+### Fixed
+- **Scrap metal had no source**, which made copper wiring, and therefore the
+  antenna, and therefore the ending, unreachable.
+- **Cooked food could not be eaten.** The eat check listed six raw ingredients
+  by name and nothing a furnace produced, so cooking meat made it useless.
+- **Wheat had no source**, so bread and meat pies were uncraftable.
+- **Titanium swords and the relic blade did 2 damage** — the same as a bare hand
+  — because combat named three swords explicitly. The Warden could not be killed
+  with the best weapon in the game.
+- **Clearing a collapsed shaft destroyed it** on the hit that opened it, so no
+  dungeon could ever be entered.
+
+### Changed
+- Tool gates, harvest drops, break thresholds, mob stats, mob drops, chest
+  tables, placement rules and food values are all data tables now. Four of the
+  five bugs above were branches that a table would not have allowed.
+- Lighting underground is set by depth rather than the clock, and the lantern
+  lights from anywhere in the pack rather than only the held slot.
+
+## [Version 0.2.0] - Overhaul (2026-09-15)
+
+A full polish and art-regeneration pass. Every system from v0.1.0 still works;
+nothing was removed from the game.
+
+### Added
+- **All 113 game assets regenerated** and packed into 5 atlases. 33 of 61
+  referenced PNGs previously did not exist, so over half the item table was
+  drawn with hand-written SVG placeholders.
+- Touch support: virtual stick, action/inventory/sprint buttons, tap-to-interact
+  on the nearest target, full-screen sheets, portrait rotate prompt.
+- Versioned saves in IndexedDB with a migration chain, autosave, an export to
+  file, and a readable error instead of a white screen on a bad save.
+- Floating "+2 wood" labels, a hit flash on struck objects, per-material harvest
+  sounds, pickup/eat/place/container cues, a low-health heartbeat, a day/night
+  sting and a two-layer ambient bed that crossfades with the clock.
+- Loading screen with real progress, error boundary, favicon and OG image.
+- 44 unit tests, a 12-check browser smoke test and a 10-check mobile test.
+
+### Changed
+- `components/Game.tsx` went from 5,119 lines to 240. The 3,870-line `useEffect`
+  is gone; the engine lives in `src/game/` as 38 modules and runs outside React.
+- All UI is React DOM. The canvas HUD is deleted.
+- Art payload: 6.75 MB across 37 files to 1.09 MB across 5, so 5 requests at
+  load instead of 37.
+- Colliders and draw sizes are authored in an asset manifest rather than derived
+  from pixels, so regenerating art can no longer change physics or scale.
+- Terrain tiles are seamless; the ground no longer shows repeat seams.
+- Saves moved from a single unversioned `localStorage` blob to IndexedDB.
+  Pre-overhaul saves are listed and migrated on load.
+
+### Fixed
+- **Iron was unobtainable.** Mining an iron node yielded nothing, so iron
+  ingots, all three iron tools and the antenna could never be crafted.
+- **Harvesting was impossible on touch** — the action button had no way to
+  select a target.
+- Keypresses shorter than a frame were dropped.
+- Player and animal sprite sheets were drawn with hardcoded grids that did not
+  match the art, so standing animals drew nothing.
+- Blight tinted whole chunks, drawing hard straight edges across the world.
+- The crafting UI reimplemented crafting rather than using the shared system.
+- ESLint had never actually run: both configs were broken and the build
+  suppressed it. Lint and TypeScript are enforced at build time now, with zero
+  errors and zero `any`.
+- The main menu's Exit button destroyed the page; Multiplayer alerted "Coming
+  Soon". Both removed.
+
 ## [Version 0.1.0] - Current Version (2026-04-04)
 
 ### Added

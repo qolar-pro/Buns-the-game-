@@ -1,0 +1,102 @@
+
+=== ASSET AUDIT ===
+referenced: 61 static + 3 dynamic pattern(s)
+on disk:    37 image(s) in public/
+
+MISSING (referenced but absent) — 33
+  antenna.png
+      components/Game.tsx:512
+      components/Game.tsx:4548
+  bed.png
+      components/Game.tsx:4530
+  bread.png
+      components/Game.tsx:4550
+  chest.png
+      components/Game.tsx:507
+      components/Game.tsx:2004
+      components/Game.tsx:4093
+  cooked_beef.png
+      components/Game.tsx:4538
+  cooked_chicken.png
+      components/Game.tsx:4541
+  cooked_mutton.png
+      components/Game.tsx:4540
+  cooked_pork.png
+      components/Game.tsx:4539
+  copper_wiring.png
+      components/Game.tsx:4543
+  egg.png
+      components/Game.tsx:4529
+  feather.png
+      components/Game.tsx:4528
+  fence.png
+      components/Game.tsx:513
+      components/Game.tsx:4549
+  furnace.png
+      components/Game.tsx:508
+      components/Game.tsx:2005
+      components/Game.tsx:4094
+  iron_axe.png
+      components/Game.tsx:4545
+  iron_ingot.png
+      components/Game.tsx:4544
+  iron_pickaxe.png
+      components/Game.tsx:4546
+  iron_sword.png
+      components/Game.tsx:4547
+  ironore.png
+      components/Game.tsx:514
+      components/Game.tsx:3619
+  leather.png
+      components/Game.tsx:4523
+  leather_backpack.png
+      components/Game.tsx:4535
+  leather_boots.png
+      components/Game.tsx:4534
+  leather_cap.png
+      components/Game.tsx:4531
+  leather_pants.png
+      components/Game.tsx:4533
+  leather_tunic.png
+      components/Game.tsx:4532
+  meat_pie.png
+      components/Game.tsx:4551
+  mutton.png
+      components/Game.tsx:4525
+  omelet.png
+      components/Game.tsx:4552
+  raw_beef.png
+      components/Game.tsx:4522
+  raw_chicken.png
+      components/Game.tsx:4527
+  raw_pork.png
+      components/Game.tsx:4524
+  scrap_metal.png
+      components/Game.tsx:4542
+  wheat.png
+      components/Game.tsx:4553
+  wool.png
+      components/Game.tsx:4526
+
+UNUSED (on disk but unreferenced) — 0
+  none
+
+DYNAMIC patterns (verify range coverage by hand)
+  /rock${i}.png  -> 9 match(es) on disk
+      components/Game.tsx:534
+      components/Game.tsx:539
+  /rock${(res.rockIndex ?? 0) + 1}.png  -> 9 match(es) on disk
+      components/Game.tsx:1997
+      components/Game.tsx:4086
+  /rock${(e.rockIndex ?? 0) + 1}.png  -> 9 match(es) on disk
+      components/Game.tsx:3622
+
+STRAY images at repo root (should not be here)
+  grass1.png  (72 KB)
+  grass2.png  (49 KB)
+  grass3.png  (45 KB)
+  tallgrass.png  (314 KB)
+
+TOTAL art payload in public/: 6.75 MB
+Budget: 2.50 MB — FAIL
+
