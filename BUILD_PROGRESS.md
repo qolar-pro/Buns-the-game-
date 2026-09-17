@@ -267,10 +267,25 @@ made it visible.
     on the hit that opened it and the dungeon could never be entered. A cleared
     shaft stays as a doorway.
 
-The last four were found by `scripts/loop-test.mjs`, which walks the whole
+16. **Iron ore, copper ore and collapsed shafts never spawned.** Every caller of
+    `spawnResource` passes an explicit type, so the untyped random table those
+    three were listed in was dead code. A census of 225 generated chunks found
+    zero of each: no iron meant no iron pickaxe, no shaft meant no dungeon, and
+    the game could not be finished at all. They have real spawn sites now, on
+    noise thresholds set from measured percentiles rather than guessed — the old
+    quarry threshold of 0.85 sat above that field's maximum of 0.72 and fired
+    never.
+
+The last five were found by `scripts/loop-test.mjs`, which walks the whole
 progression in a browser — surface to shaft to Warden to broadcast — and by
 `reachability.test.ts`, which proves every recipe ingredient can actually be
 obtained. Both exist because bug 11 was the third of its kind.
+
+Bug 16 slipped past both of them: the loop test placed its own shaft rather than
+finding one, and the reachability test reasons about drop tables, which assume
+the entity that drops the item appears in the world. The loop test walks 225
+chunks and asserts on a real census now — injecting the thing under test is how
+a test passes on a game nobody can play.
 
 ## Not done
 

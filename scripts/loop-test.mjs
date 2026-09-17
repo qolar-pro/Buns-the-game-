@@ -67,23 +67,50 @@ const firstQuest = await readState(() => {
 });
 check('run starts with nothing completed', firstQuest);
 
-// --- 2. Descend ----------------------------------------------------------
-await give('iron_pickaxe', 1);
-await readState(() => {
+// --- 2. The surface must actually carry what the run needs ------------
+// Walking rather than injecting: an earlier version of this test placed its own
+// shaft, and so never noticed that the world spawned none at all — no iron, no
+// copper, no way underground, no ending.
+const census = await page.evaluate(async () => {
   const s = window.__buns.state;
-  // Drop a shaft next to the player rather than hunting for one.
-  const cx = Math.floor(s.player.x / 1024);
-  const cy = Math.floor(s.player.y / 1024);
-  const key = `${cx},${cy}`;
-  const list = s.resources.get(key) ?? [];
-  list.push({
-    id: 'test-shaft', x: s.player.x + 40, y: s.player.y, type: 'dungeon_entrance',
-    hits: 0, maxHits: 1, scale: 1, opacity: 1,
-  });
-  s.resources.set(key, list);
-  s.selectedResourceId = 'test-shaft';
-  s.player.selectedSlot = s.player.inventory.findIndex((i) => i && i.type === 'iron_pickaxe');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let cx = -6; cx <= 6; cx += 2) {
+    for (let cy = -6; cy <= 6; cy += 2) {
+      s.player.x = cx * 1024;
+      s.player.y = cy * 1024;
+      await sleep(80);
+    }
+  }
+  await sleep(500);
+  const counts = {};
+  for (const [, list] of s.resources) {
+    for (const r of list) counts[r.type] = (counts[r.type] || 0) + 1;
+  }
+  return { chunks: s.generatedChunks.size, counts };
 });
+check('the surface spawns iron ore', (census.counts.iron_ore ?? 0) > 0, `${census.counts.iron_ore ?? 0} in ${census.chunks} chunks`);
+check('the surface spawns copper ore', (census.counts.copper_ore ?? 0) > 0, `${census.counts.copper_ore ?? 0} in ${census.chunks} chunks`);
+check('the surface spawns collapsed shafts', (census.counts.dungeon_entrance ?? 0) > 0, `${census.counts.dungeon_entrance ?? 0} in ${census.chunks} chunks`);
+
+// --- 3. Descend through a shaft the world generated ---------------------
+await give('iron_pickaxe', 1);
+const foundShaft = await readState(() => {
+  const s = window.__buns.state;
+  for (const [, list] of s.resources) {
+    for (const r of list) {
+      if (r.type === 'dungeon_entrance') {
+        s.player.x = r.x - 40;
+        s.player.y = r.y - 40;
+        s.selectedResourceId = r.id;
+        s.player.selectedSlot = s.player.inventory.findIndex((i) => i && i.type === 'iron_pickaxe');
+        return true;
+      }
+    }
+  }
+  return false;
+});
+check('a real shaft can be reached', foundShaft);
+
 for (let i = 0; i < 8; i++) {
   await tap('Space', 60);
   await wait(120);
@@ -92,7 +119,7 @@ await wait(600);
 const depth1 = await readState(() => window.__buns.state.level);
 check('entering a shaft lands underground', depth1.kind === 'dungeon' && depth1.depth === 1, JSON.stringify(depth1));
 
-// --- 3. The level is populated and finishable ---------------------------
+// --- 4. The level is populated and finishable ---------------------------
 const level = await readState(() => {
   const s = window.__buns.state;
   let chests = 0, stairs = 0, exits = 0, ore = 0;

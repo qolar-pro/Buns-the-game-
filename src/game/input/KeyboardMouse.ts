@@ -23,7 +23,7 @@ export interface InputDeps {
   removeFromInventory: (type: ItemType, count: number) => boolean;
   /** True when the resource was placed; false when the spot was refused. */
   spawnResource: (
-    forceType?: EntityType, forceX?: number, forceY?: number,
+    forceType: EntityType, forceX?: number, forceY?: number,
     chunkX?: number, chunkY?: number, rng?: () => number,
   ) => boolean;
   getResourceDimensions: (

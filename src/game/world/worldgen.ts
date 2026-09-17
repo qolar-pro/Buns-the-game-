@@ -35,44 +35,24 @@ export interface WorldDeps {
  * rewrite. They call each other, so they need to share one closure.
  */
 export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
-  const spawnResource = (forceType?: EntityType, forceX?: number, forceY?: number, chunkX?: number, chunkY?: number, rng?: () => number) => {
+  /**
+   * Place one entity.
+   *
+   * The type is required. It used to be optional, falling back to a random
+   * table — and because every caller passes a type, that table was dead code.
+   * Ore and collapsed shafts were listed in it and therefore never spawned at
+   * all, which quietly made the game unfinishable. A required type means a new
+   * material has to be given a real spawn site to exist.
+   */
+  const spawnResource = (forceType: EntityType, forceX?: number, forceY?: number, chunkX?: number, chunkY?: number, rng?: () => number) => {
     const random = rng || Math.random;
-    let type: EntityType;
-    let growthStage = 2;
-  
-    if (forceType) {
-      type = forceType;
-      if (type === 'sapling') growthStage = 0;
-      else if (type === 'tree') growthStage = 2;
-    } else {
-      const rand = random();
-      if (rand < 0.12) {
-        type = 'rock';
-      } else if (rand < 0.17) {
-        type = 'coal_ore';
-      } else if (rand < 0.205) {
-        type = 'copper_ore';
-      } else if (rand < 0.225) {
-        type = 'iron_ore';
-      } else if (rand < 0.232) {
-        // Collapsed shafts: rare, and the only way underground. Sealed with
-        // rubble, so they are useless until the player has iron.
-        type = 'dungeon_entrance';
-      } else if (rand < 0.30) {
-        type = 'sapling';
-        growthStage = 0;
-      } else if (rand < 0.38) {
-        type = 'bush';
-      } else {
-        type = 'tree';
-        growthStage = 2;
-      }
-    }
+    const type: EntityType = forceType;
+    const growthStage = type === 'sapling' ? 0 : 2;
 
     const isPlant = type !== 'rock' && type !== 'trunk' && type !== 'coal_ore';
     const rockIndex = (type === 'rock' || type === 'coal_ore') ? Math.floor(random() * 9) : undefined;
     // Use fixed scale for forced spawns (placement) to ensure predictable size/position
-    const scale = forceType ? 1.0 : (isPlant ? 0.8 + random() * 0.4 : 0.8 + random() * 0.2);
+    const scale = forceX !== undefined ? 1.0 : (isPlant ? 0.8 + random() * 0.4 : 0.8 + random() * 0.2);
     const dims = getResourceDimensions(type, scale, growthStage, rockIndex);
     const sizeW = dims.w;
     const sizeH = dims.h;
@@ -216,7 +196,7 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
     const terrainVal = fbm(cx * CHUNK_SIZE * 0.0006, cy * CHUNK_SIZE * 0.0006, 3);
   
     // Helper to try spawning multiple times if it fails due to overlap
-    const trySpawn = (type?: EntityType, fx?: number, fy?: number) => {
+    const trySpawn = (type: EntityType, fx?: number, fy?: number) => {
       // More attempts for better distribution without overlapping
       for (let attempt = 0; attempt < 15; attempt++) {
         if (spawnResource(type, fx, fy, cx, cy, random)) return true;
@@ -246,6 +226,30 @@ export function createWorldgen({ state, getResourceDimensions }: WorldDeps) {
           trySpawn(type);
         }
       }
+    }
+
+    // 2b. Metal. Its own noise field, so ore comes in districts a player can
+    //     learn and come back to rather than being sprinkled evenly. Copper is
+    //     the common one; iron is what gates the dungeon, so it is rarer but
+    //     never absent from a metal district.
+    // Thresholds are percentiles of this field measured over 3,721 chunks, not
+    // guesses: 0.50 is its ~78th percentile, so about a fifth of chunks carry
+    // metal. Guessed thresholds are how the old quarry branch ended up firing
+    // almost never.
+    const metalVal = fbm(cx * 0.35 + 3100, cy * 0.35 + 3100, 2);
+    if (metalVal > 0.50) {
+      const richness = (metalVal - 0.50) / 0.22;
+      const copper = random() < 0.45 + richness * 0.4 ? 1 : 0;
+      for (let i = 0; i < copper; i++) trySpawn('copper_ore');
+      if (random() < 0.3 + richness * 0.45) trySpawn('iron_ore');
+    }
+
+    // 2c. Collapsed shafts: the only way underground, so they must be findable
+    //     without being everywhere. Roughly one per dozen chunks — a few
+    //     minutes of walking — and sealed with rubble until the player has iron.
+    const shaftVal = fbm(cx * 0.8 + 7700, cy * 0.8 + 7700, 2);
+    if (shaftVal > 0.55 && random() < 0.6) {
+      trySpawn('dungeon_entrance');
     }
 
     // 3. General Vegetation (Bushes - Drastically reduced)
