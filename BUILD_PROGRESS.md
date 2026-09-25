@@ -319,6 +319,44 @@ a test passes on a game nobody can play.
 
 ### Found during the art rebuild
 
+27. **Every character was clipped and floating at once.** The projection scaled
+    from a declared model height; no model matched it. The biped's feet were
+    ellipsoids centred at y=0.015 with a radius of 0.032, so their soles sat at
+    y=-0.017 and were cut flat by the bottom of the frame — on all fifteen
+    characters — while nothing reached the declared 0.88 and 29 rows at the top
+    of every cell were empty. Extents are measured now, over every phase.
+
+28. **The biped was an egg on two stubs, and every animal was a body floating
+    over four sausages.** Same root cause in both: a limb's vertical *radius*
+    was being used as its *length*, with the limb centred on the ground plane,
+    so half of every leg was underground and the body was placed above where the
+    visible part stopped. The numbers looked deliberate, which is why it
+    survived this long. Both body plans were rebuilt around joint positions —
+    hip, shoulder, chin for the biped; hoof, belly, spine, withers for the
+    quadruped — rather than around radii.
+
+29. **The workbench was a featureless tan rectangle** and the anvil a dark
+    rectangle with two stripes. Both were the generic `box(band=...)` builder,
+    which is a filled rect with a gradient. An anvil is one of the most
+    recognisable shapes in existence and nobody could have identified it
+    without the tooltip. Four props now have real builders.
+
+30. **The outline ate the grass.** Adding a one-pixel contour to everything
+    turned every tuft, twig and reed into black scratches, because a one-pixel
+    blade outlined is a blade made of outline. Fixed by outlining only what
+    survives an erosion; filigree gets its contrast internally instead. Caught
+    by looking at a screenshot, again — every automated check passed.
+
+31. **The blank-canvas smoke check was failing good frames one run in three.**
+    It sampled one pixel in 997 and required more than 20 distinct colours.
+    Over six identical-looking runs that estimator returned between 21 and 380,
+    so the threshold sat inside its own sampling noise. Worse, it was the wrong
+    question: the pipeline exists to make materials out of nine colours, so a
+    clean screen of meadow legitimately has very few and the check was
+    penalising the art for working. It samples ten times as densely now and
+    tests luminance spread as well — a flat fill scores 1 and 0, a real frame
+    35+ and 14-17, which is the gap a threshold should sit in.
+
 26. **Seven in ten new games opened unplayable.** The player wakes at world
     (0, 0); the climate field is reseeded per world; so the spawn biome was
     whatever the noise said. Grassland 28.6% of the time over 5,000 seeds.

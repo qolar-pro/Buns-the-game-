@@ -58,7 +58,30 @@ await wait(6000);
 const canvas = await page.$('canvas');
 check('canvas element present', !!canvas);
 
-/** Sample the canvas: a live world is neither blank nor uniform. */
+/**
+ * Sample the canvas: a live world is neither blank nor uniform.
+ *
+ * This used to take every 997th pixel and require more than 20 distinct
+ * colours. Two problems, both of which only showed up once the art got good.
+ *
+ * A 1-in-997 sample of a screen is about 1,000 pixels, which is a thin
+ * estimator of anything; measured over six runs it returned between 21 and 380
+ * distinct colours for renders that were all equally fine. The threshold sat at
+ * 20, so a perfectly good frame failed roughly one run in three by landing on
+ * the wrong side of its own sampling noise.
+ *
+ * And the metric was wrong in principle. Colour count is a proxy for "something
+ * drew", and it was a decent proxy when the art was model-generated and every
+ * sprite carried hundreds of shades. The whole point of the current pipeline is
+ * that a material uses seven to nine colours, so a screen of meadow legitimately
+ * has very few — the test was penalising the art for being clean.
+ *
+ * What it actually wants to know is whether the canvas has *structure*. So:
+ * sample ten times as densely, and check the spread of luminance as well as the
+ * colour count. A flat fill scores 1 colour and a standard deviation of 0; a
+ * real frame scores at least 52 and 13 to 17. There is no ambiguity between
+ * those, which is what a threshold should look like.
+ */
 async function canvasSignature() {
   return page.evaluate(() => {
     const c = document.querySelector('canvas');
@@ -66,17 +89,25 @@ async function canvasSignature() {
     const g = c.getContext('2d');
     const d = g.getImageData(0, 0, c.width, c.height).data;
     const seen = new Set();
-    let sum = 0;
-    for (let i = 0; i < d.length; i += 4 * 997) {
+    let n = 0, sum = 0, sum2 = 0;
+    for (let i = 0; i < d.length; i += 4 * 101) {
       seen.add(`${d[i]},${d[i + 1]},${d[i + 2]}`);
-      sum += d[i] + d[i + 1] + d[i + 2];
+      const l = (d[i] + d[i + 1] + d[i + 2]) / 3;
+      sum += l;
+      sum2 += l * l;
+      n++;
     }
-    return { distinct: seen.size, avg: sum / (d.length / (4 * 997)) / 3 };
+    const mean = sum / n;
+    return { distinct: seen.size, std: Math.sqrt(Math.max(0, sum2 / n - mean * mean)) };
   });
 }
 
 const sig = await canvasSignature();
-check('world renders (not blank)', !!sig && sig.distinct > 20, sig ? `${sig.distinct} distinct colours` : 'no canvas');
+check(
+  'world renders (not blank)',
+  !!sig && sig.distinct > 24 && sig.std > 5,
+  sig ? `${sig.distinct} distinct colours, luminance sd ${sig.std.toFixed(1)}` : 'no canvas',
+);
 
 // Movement must change what is on screen.
 const before = await page.screenshot();

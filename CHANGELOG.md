@@ -1,5 +1,60 @@
 # Survivors Juicy Buns - Change Log
 
+## [Version 0.5.1] — The art actually reads (2026-09-25)
+
+0.5.0 built the pipeline. This is the pass where the output stopped looking
+like a tech demo of a pipeline. Every change here comes from studying what makes
+Minecraft's and Terraria's default art legible at small sizes and applying the
+principle — not their assets, which are theirs.
+
+### Changed
+- **One shared near-black outline** on every prop, item and character, grown
+  outward, applied after the grade so it keeps the exact palette floor. Each
+  object used to be rimmed in step 0 of its *own* ramp, which for skin is a mid
+  tan — the figures had no contour against the ground at all, which is the whole
+  reason they read as blobs.
+- **Flat banded shading with an ordered dither**, replacing a continuous
+  lighting expression rounded to the nearest step. Four bands held flat, with a
+  fixed Bayer matrix breaking the boundaries so a curved surface does not draw
+  concentric contour lines. Hard steps are what make nine colours legible;
+  rounding a gradient just gives you an airbrush with stairs in it.
+- **Ground detail gets its contrast internally.** A blade of grass cannot carry
+  an outline — one pixel outlined is one pixel of outline — so each blade is now
+  a shaded stroke and a lit stroke side by side, two steps either side of the
+  middle of the ramp.
+
+### Fixed
+- **Every character in the game was clipped and floating at the same time.** The
+  projection scaled from a declared model height that no model matched: the
+  biped's feet sat below y=0 and were cut flat by the bottom of every frame,
+  while 29 rows at the top of each cell were empty. Extents are measured now,
+  over every phase of the gait, so a part added later cannot push a foot off the
+  frame.
+- **Bipeds were an egg on two stubs.** The legs were ellipsoids centred at y=0
+  with a vertical radius of 0.16 — half of each leg underground, and only its
+  top 0.045 clearing the torso. Rebuilt with the proportions a figure has:
+  shoulders wider than hips, a drawn-in waist, a neck, a head about a quarter of
+  standing height, and a brow and eye highlights, because two black dots is a
+  mannequin.
+- **Every animal was a body floating over four detached sausages**, the same
+  mistake in the quadruped: `leg_len` was used as the leg's half-length with the
+  leg centred on the floor, and the barrel was then placed above where the legs
+  stopped. Legs now run from hoof to belly and overlap into the barrel, since an
+  ellipsoid's underside curves away from where the leg actually meets it.
+- **The workbench was a blank tan rectangle** and **the anvil was a dark
+  rectangle with two stripes** — both were the generic `box` builder, and the
+  anvil is one of the most recognisable silhouettes there is. Both are now
+  built as themselves: the bench has legs, a stretcher, a slab with plank seams
+  and tools on the wall; the anvil has a horn, a waist and a base. The bed and
+  the cut stump likewise (the stump is a log end, rings and all, not an oval).
+- **The blank-canvas smoke check failed one run in three on perfectly good
+  frames.** It sampled one pixel in 997 and demanded more than 20 distinct
+  colours, which is both a thin estimator (21 to 380 over six identical-looking
+  runs) and the wrong question — the pipeline's whole point is that a material
+  uses nine colours, so the check was penalising the art for being clean. It
+  samples ten times as densely now and tests luminance spread as well: a flat
+  fill scores 1 colour and a spread of 0, a real frame 35 or more and 14 to 17.
+
 ## [Version 0.5.0] — Hearthwood (2026-09-25)
 
 Every texture in the game, regenerated. Not retouched — replaced, by a

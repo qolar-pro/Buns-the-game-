@@ -30,6 +30,15 @@ from scipy import ndimage
 from hw.core import EMPTY, clean_rgba, declump, grade, render
 from palettes import ramp
 
+#: 4x4 ordered dither, centred on zero so it perturbs a band boundary both ways
+#: rather than brightening everything.
+_BAYER = (np.array([
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+], dtype=np.float32) + 0.5) / 16.0 - 0.5
+
 FACINGS = ('down', 'left', 'right', 'up')
 _ANGLE = {'down': 0.0, 'left': 90.0, 'up': 180.0, 'right': -90.0}
 
@@ -96,6 +105,52 @@ def _swing(part: Part, phase: float) -> Part:
     return replace(part, pos=(px, ny, nz))
 
 
+_EXTENT_CACHE: dict[int, tuple[float, float, float]] = {}
+
+
+def _extent(model: CharModel) -> tuple[float, float, float]:
+    """
+    The model's real bounding box in model units, over every phase of the gait.
+
+    The declared `height` used to drive the projection directly, on the
+    assumption that a model occupies exactly 0..height. None of them did. The
+    biped's feet are ellipsoids centred at y=0.015 with a vertical radius of
+    0.032, so their bottoms sat at y=-0.017 and were **cut flat by the bottom of
+    the frame** on every character in the game; meanwhile nothing reached the
+    declared 0.88, so 29 rows at the top of every cell were empty. The sprite
+    was simultaneously clipped and floating.
+
+    Measuring the model instead means a character is fitted to its cell by
+    construction, and a part added later cannot silently push a foot off the
+    frame. Measured once per model and over ALL phases, never per frame, so the
+    character does not breathe against the cell edge as it walks.
+    """
+    key = id(model)
+    hit = _EXTENT_CACHE.get(key)
+    if hit is not None:
+        return hit
+
+    y_lo, y_hi, x_half = 1e9, -1e9, 0.0
+    for step in range(16):
+        phase = step / 16
+        bob = np.sin(phase * 4 * np.pi) * model.body_bob * model.height
+        for part in model.parts:
+            p = _swing(part, phase)
+            x, y, z = p.pos
+            rx, ry, rz = p.size
+            y = y + bob + p.bob * np.sin(phase * 4 * np.pi)
+            y_lo = min(y_lo, y - ry)
+            y_hi = max(y_hi, y + ry)
+            # Worst case across facings: a part's x extent on screen is its
+            # widest rotated half-width, which is bounded by max(rx, rz).
+            reach = abs(x) if abs(x) > abs(z) else abs(z)
+            x_half = max(x_half, reach + max(abs(rx), abs(rz)))
+
+    out = (y_lo, y_hi, x_half)
+    _EXTENT_CACHE[key] = out
+    return out
+
+
 def silhouette(model: CharModel, facing: str, phase: float,
                w: int, h: int) -> np.ndarray:
     """
@@ -128,7 +183,15 @@ def render_model(model: CharModel, facing: str, phase: float,
 def _project(model: CharModel, facing: str, phase: float, w: int, h: int):
     """Place every part on screen. Shared by `silhouette` and `render_model`."""
     angle = _ANGLE[facing]
-    scale = (h - 2) / model.height
+    y_lo, y_hi, x_half = _extent(model)
+
+    # Fit the model to the cell, leaving a one-pixel margin so the outline has
+    # somewhere to go, and honour whichever axis is tighter. A character wider
+    # than it is tall (the scorpion) would otherwise have its claws clipped.
+    margin = 1.0
+    scale_y = (h - 1 - 2 * margin) / max(y_hi - y_lo, 1e-6)
+    scale_x = (w - 1 - 2 * margin) / max(2 * x_half, 1e-6)
+    scale = min(scale_y, scale_x)
 
     # Whole-body bob and lean, shared by every part so the character moves as one.
     bob = np.sin(phase * 4 * np.pi) * model.body_bob * model.height
@@ -177,7 +240,8 @@ def _project(model: CharModel, facing: str, phase: float, w: int, h: int):
     for z, x, y, rx, ry, p in placed:
         # Model space to screen: x across, y up from the bottom row.
         px = cx + x * scale
-        py = (h - 1) - y * scale
+        # y_lo maps to the last usable row, so the feet stand on the cell floor.
+        py = (h - 1 - margin) - (y - y_lo) * scale
         prx = max(rx * scale, 0.6)
         pry = max(ry * scale, 0.6)
 
@@ -187,9 +251,36 @@ def _project(model: CharModel, facing: str, phase: float, w: int, h: int):
             continue
 
         steps = steps_by_ramp[p.ramp]
-        # Dome the part: lit upper left, falling off toward its own edge.
-        lit = ((px - xx) + (py - yy)) / max(w, h)
-        shade = np.rint(steps * 0.55 + lit * 2.6 + (1 - d) * 1.2 + p.tone).astype(int)
+
+        # Light this part: one sun from the upper left, plus the part's own
+        # curvature falling off toward its edge.
+        lit = ((px - xx) / prx + (py - yy) / pry) * 0.5
+        light = lit * 0.62 + (1 - d) * 0.38
+
+        # Quantise to FOUR FLAT BANDS, not to a gradient.
+        #
+        # This used to be `rint` of a continuous expression, which is a smooth
+        # ramp rounded off: every ellipsoid came out airbrushed, and a
+        # nine-colour sprite read as a soft blob rather than as pixel art. The
+        # styles this is aiming at do the opposite — Minecraft's default blocks
+        # carry four or five shades with hard steps between them, and it is the
+        # hard steps that make sixteen pixels legible.
+        #
+        # So: pick a band, and hold it flat across the whole region. The bands
+        # sit on the middle of the ramp, keeping the extremes for the outline
+        # and for specular hits.
+        #
+        # An ordered dither breaks the band boundaries. Without it four flat
+        # bands on a curved surface draw three concentric contour lines, which
+        # reads as a topographic map; with it the boundary dissolves into a
+        # checker that the eye takes as texture. It is deterministic (a fixed
+        # Bayer matrix indexed by pixel position) so the sprite is still
+        # reproducible, and declumping afterwards removes any stray it leaves.
+        dither = _BAYER[yy % 4, xx % 4]
+        level = np.clip(light * 3.6 + dither * 0.55, 0.0, 3.999).astype(int)
+
+        base = steps // 2 - 1 + p.tone
+        shade = base + level
 
         idx = np.where(mask, np.clip(shade, 0, steps - 1), idx)
         alpha = np.where(mask, 1.0, alpha)
@@ -222,12 +313,29 @@ def _lean(idx, alpha, ramp_id, degrees: float):
     return out_i, out_a, out_r
 
 
+#: The one outline colour, shared by every character in the game.
+#:
+#: Each part used to be rimmed with step 0 of *its own* ramp. That is a
+#: perfectly sensible-sounding rule that does not work: step 0 of the skin ramp
+#: is a mid tan, so a face was outlined in a colour a shade off the face, and
+#: the figure had no contour at all against the ground. The styles this is
+#: aiming at all share the opposite convention — Terraria outlines every sprite
+#: in one near-black, and that single dark contour is most of why its sprites
+#: stay legible against any background.
+#:
+#: This is the palette floor from the brief, which is what the floor is for: the
+#: darkest colour in the game, warm rather than black.
+OUTLINE = np.array([0x1c, 0x12, 0x0b], dtype=np.uint8)
+
+
 def _paint(idx, alpha, ramp_id, ramp_names) -> np.ndarray:
     """Render each part through its own ramp, then rim, clean and grade."""
     h, w = idx.shape
     solid = alpha > 0
 
-    # A dark rim just inside the silhouette, taken from each pixel's own ramp.
+    # Internal edges keep the per-part rim: where two parts of different ramps
+    # meet, a step-0 line of the nearer part's own colour separates them without
+    # cutting the figure up with black.
     border = solid & ~ndimage.binary_erosion(solid, border_value=0)
     idx = np.where(border, 0, idx)
 
@@ -256,7 +364,26 @@ def _paint(idx, alpha, ramp_id, ramp_names) -> np.ndarray:
         rgb = (pal[safe] * 255).astype(np.uint8)
         out[m] = np.concatenate([rgb[m], np.full((m.sum(), 1), 255, np.uint8)], axis=1)
 
-    return clean_rgba(grade(out), wrap=False)
+    out = grade(out)
+
+    # The outline goes on AFTER the grade, so it stays the exact palette floor
+    # instead of being lifted by the same curve that lifts the blacks in the
+    # art. It is the one colour in the sprite that is not supposed to be lit.
+    #
+    # It is grown OUTWARD from the silhouette rather than eaten inward, because
+    # eating it inward costs the sprite a pixel of its shape everywhere — at
+    # this size an arm is four pixels wide and can't spare one. The model is
+    # fitted with a margin so there is room for it.
+    # Only around parts thick enough to carry a contour — a hat brim or a staff
+    # two pixels wide would otherwise become a line of pure outline. See
+    # `hw.core.outline_rgba`, which applies the same rule to props and items.
+    core = ndimage.binary_erosion(solid, border_value=0)
+    thick = ndimage.binary_dilation(core, border_value=0) & solid
+    ring = ndimage.binary_dilation(thick, border_value=0) & ~solid
+    out[ring, 0:3] = OUTLINE
+    out[ring, 3] = 255
+
+    return clean_rgba(out, wrap=False, erase=False)
 
 
 def sheet(model: CharModel, cols: int, w: int, h: int) -> np.ndarray:

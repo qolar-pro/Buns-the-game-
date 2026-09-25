@@ -14,6 +14,7 @@ import os
 import sys
 
 from hw.checks import report, save
+from hw.core import outline_rgba
 from hw.icons import (
     bar_stack, bow_icon, bundle, crate_icon, crossbow_icon, garment, ingot,
     leafy, loaf, mast_icon, meat, nugget, ore_chunk, panel, round_food,
@@ -156,7 +157,7 @@ def build(out_dir: str) -> list[dict]:
     os.makedirs(out_dir, exist_ok=True)
     rows = []
     for name, (fn, seed) in ITEMS.items():
-        img = fn(seed)
+        img = outline_rgba(fn(seed))
         save(img, f'{out_dir}/{name}.png')
         rows.append(report(name, img, seamless=False, budget=16))
     return rows

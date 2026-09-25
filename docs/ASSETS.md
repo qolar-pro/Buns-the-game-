@@ -120,6 +120,63 @@ parameters, no exceptions:
 This is the stage that makes a pine tree and an iron ingot look like they were
 lit by the same afternoon.
 
+## Outlines, and what gets one
+
+Every prop, item and character carries a **single shared near-black contour**,
+`#1c120b` — the palette floor. Not each object's own darkest step: that was the
+first attempt and it does not work. Step 0 of the skin ramp is a mid tan, so a
+face was contoured in a colour a shade off the face and the figure had no edge
+against the ground at all. One dark contour, shared by everything, is the
+convention the styles worth studying all use, and it is most of why those
+sprites stay legible on any background.
+
+Three details that are load-bearing:
+
+- **Grown outward, not eaten inward.** Rimming *inside* the silhouette costs the
+  sprite a pixel of its actual shape everywhere. An arm is four pixels wide and
+  cannot spare one.
+- **Applied after the grade**, so the outline keeps the exact floor colour
+  rather than being lifted by the same curve that lifts the art's blacks. It is
+  the one thing in the sprite that is not meant to be lit.
+- **Only on things at least three pixels thick.** A one-pixel grass blade with a
+  one-pixel outline is a blade made entirely of outline; the first version of
+  this turned every tuft, twig and reed in the game into black scratches. What
+  survives an erosion is thick; filigree keeps its own colour, and gets its
+  contrast internally instead — a shaded stroke and a lit stroke side by side,
+  two steps either side of the middle.
+
+Terrain never gets an outline. It tiles, and an outlined tile is a grid.
+
+## Shading is banded, not domed
+
+Each region picks one of **four flat bands** and holds it. The bands sit on the
+middle of the ramp; the extremes are kept for the outline and for specular hits.
+
+This replaced a continuous lighting expression rounded to the nearest step,
+which is a gradient with stairs in it — every ellipsoid came out airbrushed, and
+a nine-colour sprite read as a soft blob. Hard steps are what make a handful of
+pixels legible.
+
+Four flat bands on a curved surface draw three concentric contour lines, which
+reads as a topographic map, so a **4x4 ordered dither** breaks the boundaries
+into a checker the eye takes as texture. It is a fixed Bayer matrix indexed by
+pixel position, so the output stays reproducible, and declumping afterwards
+removes any stray it leaves.
+
+## Characters are fitted to their cells, not assumed to fit
+
+A model's vertical extent is **measured**, over every phase of its gait, and the
+projection is scaled from that. It used to be scaled from a declared `height`
+that no model actually matched: the biped's feet were ellipsoids centred at
+y=0.015 with a radius of 0.032, so their soles sat below zero and were cut flat
+by the bottom of every frame, while nothing reached the declared height and 29
+rows at the top of each cell were empty. Every character in the game was
+simultaneously clipped and floating.
+
+Measuring means a part added later cannot silently push a foot off the frame.
+Measured once per model and across all phases, never per frame, so the character
+does not breathe against the cell edge as it walks.
+
 ## Light
 
 **One light, upper left, everywhere.** Not a convention the scripts are asked

@@ -276,17 +276,79 @@ def count_colours(rgba: np.ndarray) -> int:
     return 0 if len(vis) == 0 else len(np.unique(vis, axis=0))
 
 
+#: The one outline colour in the game: the palette floor, warm rather than black.
+OUTLINE_RGB = np.array([0x1c, 0x12, 0x0b], dtype=np.uint8)
+
+
 def lone_pixels(rgba: np.ndarray) -> int:
-    """Opaque pixels differing from all four neighbours. Should be zero."""
+    """
+    Opaque pixels differing from all four neighbours. Should be zero.
+
+    The outline is exempt. A one-pixel contour around a sprite is by definition
+    a run of pixels that match nothing above and below them, so counting it here
+    reported every outlined sprite in the game as hundreds of strays — the check
+    firing on the feature it was asked to allow. The distinction is intent: a
+    stray is a pixel nobody meant to put there, and the outline is the most
+    deliberate pixel in the image. Everything else is still held to zero, so the
+    check keeps its teeth on the shading, which is where strays actually come
+    from.
+    """
     a = rgba[..., 3] > 0
     key = rgba[..., :3].astype(np.int32)
     key = (key[..., 0] << 16) | (key[..., 1] << 8) | key[..., 2]
+    outline_key = int((int(OUTLINE_RGB[0]) << 16) | (int(OUTLINE_RGB[1]) << 8)
+                      | int(OUTLINE_RGB[2]))
     key = np.where(a, key, -1)
     n = [np.roll(key, 1, 0), np.roll(key, -1, 0), np.roll(key, 1, 1), np.roll(key, -1, 1)]
-    lonely = a.copy()
+    lonely = a & (key != outline_key)
     for m in n:
         lonely &= (key != m)
     return int(lonely.sum())
+
+
+def outline_rgba(rgba: np.ndarray) -> np.ndarray:
+    """
+    Grow a one-pixel dark contour around a finished sprite.
+
+    Props used to get `rim()` only: step 0 of the object's *own* ramp, painted
+    just inside the silhouette. Against the ground that is barely an edge at all
+    — a stone rimmed in dark stone still dissolves into a stone floor — and it
+    costs the sprite a pixel of its actual shape, which at this size is a lot.
+
+    One shared near-black contour, grown outward, is the convention every pixel
+    style worth borrowing from uses, and it is most of why those sprites stay
+    readable on any background. Applied to props, items and characters; never to
+    terrain, which tiles and would grow a grid of dark lines.
+
+    Runs after the grade, so the outline keeps the exact palette floor rather
+    than being lifted by the curve that lifts the art's blacks.
+    """
+    solid = rgba[..., 3] > 8
+    if not solid.any():
+        return rgba
+
+    # Only outline what is thick enough to carry one.
+    #
+    # A one-pixel contour around a one-pixel grass blade is a blade made
+    # entirely of contour: the first version of this turned every tuft, twig and
+    # reed in the game into black scratches on the ground. Filigree has to keep
+    # its own colour.
+    #
+    # `core` is what survives an erosion, so a run narrower than three pixels
+    # has none. Dilating the core back out marks the pixels that belong to a
+    # thick region, and only those get a ring. Three pixels is the honest
+    # threshold: it is the narrowest thing that can lose its outer pixel to an
+    # outline and still have a pixel of itself left.
+    core = ndimage.binary_erosion(solid, border_value=0)
+    thick = ndimage.binary_dilation(core, border_value=0) & solid
+    if not thick.any():
+        return rgba
+
+    ring = ndimage.binary_dilation(thick, border_value=0) & ~solid
+    out = rgba.copy()
+    out[ring, 0:3] = OUTLINE_RGB
+    out[ring, 3] = 255
+    return out
 
 
 def clean_rgba(rgba: np.ndarray, passes: int = 12, wrap: bool = True,

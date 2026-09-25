@@ -15,6 +15,7 @@ import sys
 import numpy as np
 
 from hw.checks import report, save
+from hw.core import outline_rgba
 from hw.draw import disc, ellipse, rect, stroke
 from hw.sprite import dome, finish_sprite, new_sprite, tapered
 from palettes import ramp
@@ -96,7 +97,7 @@ def build(out_dir: str) -> list[dict]:
     os.makedirs(out_dir, exist_ok=True)
     rows = []
     for name, fn in ICONS.items():
-        img = fn()
+        img = outline_rgba(fn())
         save(img, f'{out_dir}/{name}.png')
         rows.append(report(name, img, seamless=False, budget=12))
     return rows

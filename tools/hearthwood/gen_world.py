@@ -14,8 +14,11 @@ import os
 import sys
 
 from hw.checks import report, save
+from hw.core import outline_rgba
+from hw.materials import log_end
 from hw.architecture import house, stall
-from hw.props import barrel_prop, chest_prop, furnace_prop, well_prop
+from hw.props import (anvil_prop, barrel_prop, bed_prop, chest_prop,
+                     furnace_prop, well_prop, workbench_prop)
 from hw.props import (
     boulder, box, cactus_prop, effect, flower_patch, mushroom_prop,
     opening, plank_panel, post_thing, tree, tuft,
@@ -77,8 +80,10 @@ add('tree',        TALL, lambda w, h, s: tree(w, h, s), 3010, materials=2)
 add('small_tree',  TALL, lambda w, h, s: tree(w, h, s, crown_r=0.30, trunk_w=0.06), 3011, materials=2)
 add('sapling',     FLAT, lambda w, h, s: tuft(w, h, s, ramp_name='grass',
                                               blades=4, tall=0.42), 3012)
-add('trunk',       FLAT, lambda w, h, s: box(w, h, s, body='oak_bark',
-                                             band=None, rounded=True), 3013)
+# A cut stump seen from above is a log end, which the material library already
+# knows how to draw. It was a plain brown oval, because `box(rounded=True)` is a
+# filled ellipse and nothing more.
+add('trunk',       FLAT, lambda w, h, s: log_end(min(w, h), s, 'oak_wood'), 3013)
 add('bush',        FLAT, lambda w, h, s: tree(w, h, s, crown_r=0.46,
                                               trunk_w=0.028, crown='moss'), 3014, materials=2)
 add('pine_tree',   TALL, lambda w, h, s: tree(w, h, s, crown='pine',
@@ -126,7 +131,7 @@ add('crop_wheat',    FLAT, lambda w, h, s: tuft(w, h, s, ramp_name='wheat',
                                                 blades=11, tall=0.72, tip='gold'), 3042, materials=2)
 
 # --- placeables ------------------------------------------------------------
-add('workbench',  FLAT, lambda w, h, s: box(w, h, s, body='oak_wood', band=None), 3050)
+add('workbench',  FLAT, lambda w, h, s: workbench_prop(w, h, s), 3050, materials=2)
 add('furnace',    FLAT, lambda w, h, s: furnace_prop(w, h, s), 3051, materials=3)
 add('furnace_lit', FLAT, lambda w, h, s: furnace_prop(w, h, s, lit=True), 3052, materials=3)
 add('chest',      FLAT, lambda w, h, s: chest_prop(w, h, s), 3053, materials=3)
@@ -136,9 +141,8 @@ add('loot_chest', FLAT, lambda w, h, s: chest_prop(w, h, s, body='dark_bark',
 add('crate',      FLAT, lambda w, h, s: chest_prop(w, h, s, body='spruce_wood',
                                                    band='iron', lock=None), 3056, materials=2)
 add('barrel',     FLAT, lambda w, h, s: barrel_prop(w, h, s), 3057, materials=2)
-add('bed',        FLAT, lambda w, h, s: box(w, h, s, body='cloth_red',
-                                            band='oak_wood'), 3058, materials=2)
-add('anvil',      FLAT, lambda w, h, s: box(w, h, s, body='steel_dark', band='iron'), 3059, materials=2)
+add('bed',        FLAT, lambda w, h, s: bed_prop(w, h, s), 3058, materials=3)
+add('anvil',      FLAT, lambda w, h, s: anvil_prop(w, h, s), 3059, materials=2)
 add('wall',       FLAT, lambda w, h, s: plank_panel(w, h, s, body='oak_wood'), 3060)
 add('floor',      FLAT, lambda w, h, s: plank_panel(w, h, s, body='spruce_wood',
                                                     vertical=False), 3061)
@@ -198,7 +202,7 @@ def build(out_dir: str) -> list[dict]:
     rows = []
     for name, (_size, fn, seed, materials) in PROPS.items():
         w, h = frame_for(name)
-        img = fn(w, h, seed)
+        img = outline_rgba(fn(w, h, seed))
         save(img, f'{out_dir}/{name}.png')
         row = report(name, img, seamless=False, budget=11, materials=materials)
         row['size'] = f'{w}x{h}'

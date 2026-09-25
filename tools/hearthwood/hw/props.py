@@ -158,11 +158,29 @@ def tuft(w: int, h: int, seed: int, *, ramp_name: str = 'grass',
     r = rng(seed)
     c = _c(w, h, ramp_name)
     mm = _mid(ramp_name)
-    for i in range(blades):
+    steps = len(ramp(ramp_name))
+
+    # Each blade is drawn TWICE: a dark stroke, then a bright one one pixel to
+    # its left.
+    #
+    # Blades used to be a single stroke at the middle of the grass ramp, which
+    # is exactly where the grass *tile* is, so a tuft standing on grass was the
+    # same colour as the grass and simply disappeared. The tufts were there the
+    # whole time and invisible in every screenshot of the game.
+    #
+    # They cannot be outlined — a one-pixel blade outlined is a blade made of
+    # outline — so the contrast has to live inside the blade itself. A dark half
+    # and a light half is what a blade of grass does anyway, and two pixels of
+    # opposed value read against any background, which one pixel of mid-tone
+    # never will.
+    for _ in range(blades):
         x = w / 2 + r.uniform(-w * spread, w * spread)
         top = h - h * tall * r.uniform(0.6, 1.15)
-        c.put(stroke(c, [(int(x), h - 1), (int(x + r.uniform(-2.5, 2.5)), int(top))]),
-              mm + int(r.integers(-1, 3)))
+        drift = r.uniform(-2.5, 2.5)
+        shade = stroke(c, [(int(x) + 1, h - 1), (int(x + drift) + 1, int(top))])
+        c.put(shade, max(1, mm - 2))
+        lit = stroke(c, [(int(x), h - 1), (int(x + drift), int(top))])
+        c.put(lit, min(steps - 1, mm + 2 + int(r.integers(0, 2))))
     img = finish_sprite(c, ramp_name, outline=False)
     if not tip:
         return img
@@ -182,7 +200,9 @@ def flower_patch(w: int, h: int, seed: int, petal: str, stem: str = 'grass') -> 
     for _ in range(4):
         x = int(w / 2 + r.uniform(-w * 0.28, w * 0.28))
         y = int(h - h * r.uniform(0.4, 0.7))
-        s.put(stroke(s, [(x, h - 1), (x, y)]), _mid(stem))
+        # Shaded side then lit side, for the same reason as `tuft`.
+        s.put(stroke(s, [(x + 1, h - 1), (x + 1, y)]), max(1, _mid(stem) - 2))
+        s.put(stroke(s, [(x, h - 1), (x, y)]), _mid(stem) + 2)
         heads.append((x, y))
     img = finish_sprite(s, stem, outline=False)
 
@@ -626,3 +646,137 @@ def furnace_prop(w: int, h: int, seed: int, *, lit: bool = False) -> np.ndarray:
     sm = _c(w, h, 'coal')
     sm.put(rect(sm, int(w * 0.34), int(h * 0.44), int(w * 0.66), int(h * 0.50)), 1)
     return compose(img, finish_sprite(sm, 'coal', outline=False))
+
+
+def workbench_prop(w: int, h: int, seed: int, *, body: str = 'oak_wood',
+                   tool_ramp: str = 'iron') -> np.ndarray:
+    """
+    A carpenter's bench: slab top, four legs, a stretcher, and tools on pegs.
+
+    It used to be `box(band=None)`, which is a filled rectangle with a light
+    gradient on it — a tan square in the world, and the single least readable
+    object in the game. The lesson from the styles worth borrowing from is that
+    a prop earns its silhouette: a bench is legible because it has *legs*, and
+    the gap between the legs is as much of the shape as the wood is.
+    """
+    r = rng(seed)
+    c = _c(w, h, body)
+    mm = _mid(body)
+
+    top_y0, top_y1 = int(h * 0.36), int(h * 0.47)
+    x0, x1 = int(w * 0.10), int(w * 0.90)
+
+    # Legs, splayed very slightly so the bench does not read as a filing cabinet.
+    leg_w = max(2, int(w * 0.075))
+    for lx in (int(w * 0.16), int(w * 0.84) - leg_w):
+        c.put(rect(c, lx, top_y1, lx + leg_w, h - 2), mm - 2)
+    # Stretcher between them, low down: the bar that says "furniture".
+    c.put(rect(c, int(w * 0.20), int(h * 0.80), int(w * 0.80), int(h * 0.84)), mm - 1)
+
+    # The slab, last so it sits in front of the legs.
+    c.put(rect(c, x0, top_y0, x1, top_y1), mm)
+    # Front edge of the slab, one step down, so the top reads as a thickness.
+    c.put(rect(c, x0, top_y1 - max(1, int(h * 0.02)), x1, top_y1), mm - 2)
+
+    # Plank seams along the top.
+    for frac in (0.34, 0.58, 0.79):
+        sx = x0 + int((x1 - x0) * frac)
+        c.put(rect(c, sx, top_y0, sx, top_y1 - 2), mm - 2)
+
+    top_light(c, top=1, bottom=-1)
+    img = finish_sprite(c, body)
+
+    # A saw and a mallet hanging over the bench, in iron and a paler wood.
+    t = _c(w, h, tool_ramp)
+    tm = _mid(tool_ramp)
+    # Saw blade: a flat trapezoid above the bench, teeth suggested by one row.
+    sx0, sx1 = int(w * 0.20), int(w * 0.46)
+    sy = int(h * 0.20)
+    t.put(rect(t, sx0, sy, sx1, sy + max(2, int(h * 0.05))), tm)
+    t.put(rect(t, sx0, sy + max(2, int(h * 0.05)), sx1, sy + max(3, int(h * 0.065))), tm - 3)
+    # Mallet head.
+    t.put(rect(t, int(w * 0.60), int(h * 0.17), int(w * 0.78), int(h * 0.27)), tm - 1)
+    img = compose(img, finish_sprite(t, tool_ramp, outline=False))
+
+    # Mallet handle, in the bench's own wood so the set stays closed.
+    hd = _c(w, h, body)
+    hd.put(rect(hd, int(w * 0.67), int(h * 0.27), int(w * 0.71), int(h * 0.36)), mm - 1)
+    img = compose(img, finish_sprite(hd, body, outline=False))
+    _ = r
+    return img
+
+
+def anvil_prop(w: int, h: int, seed: int, *, body: str = 'steel_dark',
+               face: str = 'iron') -> np.ndarray:
+    """
+    An anvil: horn, waist, base. The silhouette IS the object.
+
+    Also formerly `box` — a dark rectangle with two stripes. An anvil is one of
+    the most recognisable shapes there is and it was being drawn as a filing
+    cabinet; nobody would have identified it without the tooltip.
+    """
+    r = rng(seed)
+    c = _c(w, h, body)
+    mm = _mid(body)
+
+    # Base: wide, short, slightly tapered.
+    c.put(rect(c, int(w * 0.20), int(h * 0.80), int(w * 0.80), h - 2), mm - 1)
+    c.put(rect(c, int(w * 0.26), int(h * 0.74), int(w * 0.74), int(h * 0.80)), mm - 2)
+    # Waist: the narrow column.
+    c.put(rect(c, int(w * 0.38), int(h * 0.50), int(w * 0.62), int(h * 0.76)), mm - 2)
+    # Body: the block the face sits on.
+    c.put(rect(c, int(w * 0.24), int(h * 0.40), int(w * 0.76), int(h * 0.52)), mm)
+    # Horn: a taper off the left, which is the whole reason an anvil is an anvil.
+    yy, xx = c.coords()
+    t = np.clip((xx - w * 0.04) / (w * 0.22), 0.0, 1.0)
+    horn_half = (h * 0.015) + t * (h * 0.055)
+    mid = h * 0.455
+    horn = (xx >= int(w * 0.04)) & (xx <= int(w * 0.26)) \
+        & (np.abs(yy - mid) <= horn_half)
+    c.put(horn, mm)
+    # Heel, squared off on the right.
+    c.put(rect(c, int(w * 0.74), int(h * 0.40), int(w * 0.86), int(h * 0.50)), mm - 1)
+
+    top_light(c, top=2, bottom=-1)
+    img = finish_sprite(c, body)
+
+    # The working face: a bright band along the top, polished by use.
+    f = _c(w, h, face)
+    fm = _mid(face)
+    f.put(rect(f, int(w * 0.24), int(h * 0.39), int(w * 0.86), int(h * 0.42)), fm + 2)
+    img = compose(img, finish_sprite(f, face, outline=False))
+    _ = r
+    return img
+
+
+def bed_prop(w: int, h: int, seed: int, *, sheets: str = 'cloth_red',
+             frame: str = 'oak_wood', pillow: str = 'parchment') -> np.ndarray:
+    """A bed seen from above-ish: frame, mattress, blanket, pillow."""
+    r = rng(seed)
+    f = _c(w, h, frame)
+    fm = _mid(frame)
+    # Frame, with a headboard at the top and a low footboard.
+    f.put(rect(f, int(w * 0.14), int(h * 0.20), int(w * 0.86), h - 2), fm - 1)
+    f.put(rect(f, int(w * 0.14), int(h * 0.12), int(w * 0.86), int(h * 0.22)), fm)
+    for frac in (0.34, 0.62, 0.86):
+        sy = int(h * frac)
+        f.put(rect(f, int(w * 0.14), sy, int(w * 0.16), sy), fm - 2)
+    top_light(f, top=1, bottom=-1)
+    img = finish_sprite(f, frame)
+
+    # Mattress and blanket.
+    s = _c(w, h, sheets)
+    sm = _mid(sheets)
+    s.put(rect(s, int(w * 0.19), int(h * 0.30), int(w * 0.81), int(h * 0.94)), sm)
+    # A fold line across the blanket, so it is cloth and not a slab.
+    s.put(rect(s, int(w * 0.19), int(h * 0.52), int(w * 0.81), int(h * 0.55)), sm - 2)
+    s.put(rect(s, int(w * 0.19), int(h * 0.55), int(w * 0.81), int(h * 0.58)), sm + 1)
+    img = compose(img, finish_sprite(s, sheets, outline=False))
+
+    # Pillow at the head.
+    p = _c(w, h, pillow)
+    pm = _mid(pillow)
+    p.put(ellipse(p, w * 0.5, h * 0.29, w * 0.26, h * 0.075), pm + 1)
+    img = compose(img, finish_sprite(p, pillow, outline=False))
+    _ = r
+    return img
