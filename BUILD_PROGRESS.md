@@ -298,6 +298,25 @@ a test passes on a game nobody can play.
     strictly worse than the crawler standing next to it. Mob profiles carry an
     optional ranged attack now, and it holds its distance and fires.
 
+19. **Thirty-five of fifty-two entity types were never drawn.** `PROP_TYPES` was
+    a hardcoded list of twelve written early on, `isWorldObject` asked only that
+    list, and the draw dispatch had no fallback for anything else. Every entity
+    added afterwards — all six dungeon fittings, all thirteen biome plants, all
+    eight village buildings, the crops, the walls, and `grass`, which predates
+    the lot — existed in the world with working colliders, tool gates and drop
+    tables, and was simply never painted. A dungeon was an empty floor; a
+    village was four people standing in a field.
+
+    Nothing caught it. Not 152 unit tests, not 59 browser checks, because every
+    one of them asserts on game state and the state was entirely correct. The
+    project already knew this failure mode — it is written three paragraphs up —
+    and walked into it anyway. Found by taking a screenshot.
+
+    `isWorldObject` asks the asset manifest now, and there is a generic atlas
+    draw for anything without a special case. `render/__tests__/props.test.ts`
+    walks every entity type and asks the exact question the renderer asks; it
+    was checked against the old predicate to confirm it fails on it.
+
 ## Not done
 
 - **A tree still pops rather than falling and fading**, and there is no
@@ -323,3 +342,9 @@ a test passes on a game nobody can play.
   player chopping their house down.
 - **Only two endings.** The choice is real, but it is a fork with two arms, not
   the three the lore could carry.
+- **Biome borders are hard straight lines.** `biomeStrength` exists and fades
+  spawn density across a border, but the terrain pass does not use it, so grass
+  meets marsh on a razor edge. The same mistake the per-chunk blight flag made,
+  in a different place.
+- **The snow tile repeats visibly**, the same motif on a grid. It is the one
+  terrain tile that did not come out seamless enough to hide its period.

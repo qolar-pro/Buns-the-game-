@@ -6,6 +6,7 @@
  * Split out of the draw pass to keep Renderer.ts under 500 lines. The bodies are
  * unchanged; they take the sprite set and helpers the draw loop used to close over.
  */
+import { assets } from '../assets/AssetRegistry';
 import { idForEntity } from '../assets/colliders';
 import type { ColliderShape } from '../../../lib/SpriteCollider';
 import { ROCK_COLOR } from '../core/config';
@@ -45,10 +46,23 @@ export const ROCK_TYPES = new Set<string>([
   'rock', 'coal_ore', 'iron_ore', 'branch', 'small_rock',
 ]);
 
-/** True when this entity is drawn here rather than by the main pass. */
+/**
+ * True when this entity is drawn here rather than by the main pass.
+ *
+ * The two sets above are the hand-tuned cases — swaying plants, animated
+ * campfires, the antenna's progress bar. Everything else falls through to the
+ * generic atlas draw, which is why this asks the manifest rather than a list.
+ *
+ * It used to be only the two sets, and there was no fallback. Every entity
+ * added after they were written — all the dungeon fittings, all the biome
+ * flora, every village building, the crops, the walls — existed in the world
+ * with working colliders and drops and was simply never painted. Not one test
+ * caught it, because they all assert on game state, and the state was correct.
+ */
 export function isWorldObject(type: unknown): boolean {
   const t = String(type);
-  return PROP_TYPES.has(t) || ROCK_TYPES.has(t);
+  if (PROP_TYPES.has(t) || ROCK_TYPES.has(t)) return true;
+  return assets.has(idForEntity(t));
 }
 
 export function drawWorldObject(
@@ -62,6 +76,35 @@ export function drawWorldObject(
   if (flashing) {
     ctx.save();
     ctx.filter = 'brightness(2.4) saturate(0.25)';
+  }
+
+  // The generic path: look the sprite up by entity type and draw it at its
+  // authored world size. Anything without a special case lands here.
+  if (!PROP_TYPES.has(String(ent.type)) && !ROCK_TYPES.has(String(ent.type))) {
+    const e = ent as Resource & { isTargeted?: boolean };
+    ctx.globalAlpha = e.opacity ?? 1;
+    const dims = getResourceDimensions(e.type, e.scale, e.growthStage, e.rockIndex);
+    const id = idForEntity(String(e.type), {
+      growthStage: e.growthStage,
+      rockIndex: e.rockIndex,
+      // A furnace is lit while it is burning fuel; a chest is open while the
+      // player has it open. Both have a second frame in the atlas.
+      lit: (e.fuelTimer ?? 0) > 0,
+    });
+
+    if (e.isTargeted) {
+      ctx.save();
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'yellow';
+      ctx.globalAlpha = 0.8;
+      assets.draw(ctx, id, Math.round(e.x), Math.round(e.y), dims.w, dims.h);
+      ctx.restore();
+    }
+
+    assets.draw(ctx, id, Math.round(e.x), Math.round(e.y), dims.w, dims.h);
+    ctx.globalAlpha = 1;
+    if (flashing) ctx.restore();
+    return;
   }
 
   if (PROP_TYPES.has(String(ent.type))) {
