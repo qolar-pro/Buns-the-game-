@@ -324,6 +324,43 @@ afterwards.
 
 7. `npm run audit:assets` must still report 0 missing, 0 unused.
 
+## Hand-made art beats generated art
+
+Drop a PNG at `assets-hand/<atlas>/<id>.png` and it is packed instead of the
+generated one. Nothing else changes: the id is the manifest key, the packer
+reads the real pixel size off the file, and the generator keeps producing
+everything else.
+
+That means the set can be replaced **one sprite at a time**. A half-finished
+hand-drawn set still gives a game that runs, which is the only way a long art
+pass is survivable.
+
+```bash
+npm run art:brief    # regenerate docs/ART_BRIEF.md + the palette files
+npm run art:check    # validate everything in assets-hand/
+npm run assets:pack  # pack; hand-made wins
+```
+
+**[docs/ART_BRIEF.md](ART_BRIEF.md)** is generated, and is what you hand to
+whoever is drawing: every sprite's exact canvas size, what it is, the rules, and
+the palette. It is regenerated from the catalogue and from the art that actually
+exists, so its sizes cannot drift from reality the way a hand-written spec does.
+
+The palette ships as files an editor can load rather than a table someone has to
+retype — `docs/palette/hearthwood.gpl` for Krita, LibreSprite, Aseprite and
+GIMP, `.hex` for Piskel and friends, and `.png` for anything that imports
+swatches from an image.
+
+`npm run art:check` is the part that earns its keep. Every check in it
+corresponds to a defect this project has actually shipped: a misspelled filename
+that the packer silently ignores, a sprite saved without alpha, a canvas at the
+wrong size, a sheet whose width does not divide into its columns, anti-aliased
+edges that fringe when scaled. It was tested against five deliberately broken
+files before being trusted.
+
+`assets-hand/` is committed. It is the only art in the repo that a human made,
+so it is the only art that cannot be regenerated.
+
 ## Engine import
 
 Point/nearest filtering, no compression, mipmaps off. This matters more for this

@@ -120,6 +120,10 @@ otherwise so it can gate CI.
   and how to add one asset end to end.
 - **[docs/IMPORT.md](docs/IMPORT.md)** — importing into an engine. Point/nearest
   filtering, no compression, mipmaps off; this art does not survive bilinear.
+- **[docs/ART_BRIEF.md](docs/ART_BRIEF.md)** — generated spec for replacing any
+  sprite by hand: exact canvas sizes, the rules, editor setup. Drop a PNG in
+  `assets-hand/<atlas>/<id>.png` and it beats the generated one, one sprite at a
+  time.
 - **`docs/contact/hearthwood.png`** — every asset at 8×, every tile at 3×3, and
   the ground materials on isometric cubes.
 

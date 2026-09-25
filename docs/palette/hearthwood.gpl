@@ -1,0 +1,311 @@
+GIMP Palette
+Name: Hearthwood — Buns the Game
+Columns: 9
+#
+ 28  18  11	OUTLINE
+ 80  53  31	oak_wood 0
+109  76  40	oak_wood 1
+139 100  50	oak_wood 2
+166 124  65	oak_wood 3
+188 147  81	oak_wood 4
+205 167  99	oak_wood 5
+220 185 120	oak_wood 6
+232 203 143	oak_wood 7
+ 47  34  22	oak_bark 0
+ 66  48  30	oak_bark 1
+ 87  65  39	oak_bark 2
+107  80  49	oak_bark 3
+129  98  60	oak_bark 4
+150 117  73	oak_bark 5
+170 136  88	oak_bark 6
+187 153 103	oak_bark 7
+ 47  32  21	spruce_wood 0
+ 67  45  26	spruce_wood 1
+ 87  59  35	spruce_wood 2
+106  74  44	spruce_wood 3
+124  89  53	spruce_wood 4
+142 105  65	spruce_wood 5
+159 121  76	spruce_wood 6
+174 137  90	spruce_wood 7
+ 28  18  11	dark_bark 0
+ 39  25  15	dark_bark 1
+ 52  34  21	dark_bark 2
+ 65  42  26	dark_bark 3
+ 79  52  33	dark_bark 4
+ 95  63  40	dark_bark 5
+110  75  49	dark_bark 6
+ 60  43  25	dead_plant 0
+ 75  55  31	dead_plant 1
+ 92  68  36	dead_plant 2
+109  83  44	dead_plant 3
+125  99  53	dead_plant 4
+144 118  63	dead_plant 5
+162 137  73	dead_plant 6
+ 49  60  18	grass 0
+ 60  80  24	grass 1
+ 72 100  31	grass 2
+ 88 123  40	grass 3
+108 148  50	grass 4
+128 171  65	grass 5
+148 189  86	grass 6
+169 208 107	grass 7
+ 40  54  21	leaf 0
+ 51  69  26	leaf 1
+ 61  85  32	leaf 2
+ 72 104  40	leaf 3
+ 85 125  48	leaf 4
+ 98 146  60	leaf 5
+113 166  75	leaf 6
+129 187  90	leaf 7
+ 51  64  31	moss 0
+ 67  82  40	moss 1
+ 85 102  51	moss 2
+104 122  62	moss 3
+124 142  74	moss 4
+144 162  87	moss 5
+162 178 102	moss 6
+ 29  46  30	pine 0
+ 35  56  37	pine 1
+ 41  67  44	pine 2
+ 48  78  51	pine 3
+ 55  91  60	pine 4
+ 63 104  69	pine 5
+ 73 119  81	pine 6
+ 83 134  92	pine 7
+ 40  64  24	cactus 0
+ 48  79  32	cactus 1
+ 56  95  40	cactus 2
+ 64 112  50	cactus 3
+ 73 129  61	cactus 4
+ 84 148  74	cactus 5
+100 168  91	cactus 6
+116 188 108	cactus 7
+ 53  49  45	stone 0
+ 69  64  59	stone 1
+ 87  81  75	stone 2
+106  99  92	stone 3
+125 118 110	stone 4
+144 136 128	stone 5
+162 154 144	stone 6
+179 172 161	stone 7
+195 189 178	stone 8
+ 91  85  79	pebble 0
+117 110 103	pebble 1
+143 136 128	pebble 2
+170 163 153	pebble 3
+ 59  36  22	dirt 0
+ 77  48  29	dirt 1
+ 95  61  38	dirt 2
+113  75  47	dirt 3
+133  89  56	dirt 4
+151 105  68	dirt 5
+168 122  82	dirt 6
+ 92  74  44	path 0
+113  96  54	path 1
+134 116  64	path 2
+153 134  75	path 3
+170 150  86	path 4
+186 164  98	path 5
+199 177 110	path 6
+113  80  37	sand 0
+136  99  45	sand 1
+159 120  54	sand 2
+176 138  64	sand 3
+191 156  76	sand 4
+205 174  93	sand 5
+216 192 117	sand 6
+228 211 142	sand 7
+ 97  67  37	sandstone 0
+116  83  45	sandstone 1
+134  99  53	sandstone 2
+151 115  63	sandstone 3
+166 131  75	sandstone 4
+181 148  89	sandstone 5
+195 166 107	sandstone 6
+209 185 126	sandstone 7
+ 43  36  22	marsh 0
+ 54  46  28	marsh 1
+ 66  56  33	marsh 2
+ 77  66  40	marsh 3
+ 88  76  47	marsh 4
+100  87  55	marsh 5
+112  99  64	marsh 6
+142 154 169	snow 0
+160 172 185	snow 1
+178 189 200	snow 2
+195 204 215	snow 3
+210 219 228	snow 4
+225 232 239	snow 5
+238 242 247	snow 6
+246 248 250	snow 7
+ 35  48  25	bog 0
+ 44  60  31	bog 1
+ 53  72  37	bog 2
+ 63  86  45	bog 3
+ 73 101  55	bog 4
+ 85 115  66	bog 5
+ 97 130  79	bog 6
+ 43  47  54	iron 0
+ 67  75  85	iron 1
+ 95 105 116	iron 2
+127 137 150	iron 3
+163 173 185	iron 4
+200 208 217	iron 5
+ 27  31  38	steel_dark 0
+ 41  46  53	steel_dark 1
+ 56  63  70	steel_dark 2
+ 72  80  88	steel_dark 3
+ 92 101 110	steel_dark 4
+114 123 134	steel_dark 5
+ 63  31  20	copper 0
+ 99  47  25	copper 1
+137  66  28	copper 2
+174  90  29	copper 3
+202 121  44	copper 4
+223 156  67	copper 5
+ 77  48   5	gold 0
+115  77   5	gold 1
+153 109   6	gold 2
+188 143  18	gold 3
+213 177  62	gold 4
+234 211 105	gold 5
+ 28  48  56	titanium 0
+ 42  71  80	titanium 1
+ 58  96 107	titanium 2
+ 79 125 137	titanium 3
+109 159 172	titanium 4
+145 196 209	titanium 5
+ 23  22  26	coal 0
+ 34  33  39	coal 1
+ 46  44  52	coal 2
+ 59  56  65	coal 3
+ 73  69  78	coal 4
+ 87  83  92	coal 5
+ 76  23  25	cloth_red 0
+101  31  30	cloth_red 1
+128  40  34	cloth_red 2
+154  53  37	cloth_red 3
+180  68  40	cloth_red 4
+202  95  54	cloth_red 5
+223 122  69	cloth_red 6
+ 24  40  65	cloth_blue 0
+ 33  53  85	cloth_blue 1
+ 44  66 106	cloth_blue 2
+ 59  82 128	cloth_blue 3
+ 74  98 150	cloth_blue 4
+100 121 173	cloth_blue 5
+127 145 195	cloth_blue 6
+ 36  53  29	cloth_green 0
+ 47  68  37	cloth_green 1
+ 58  84  47	cloth_green 2
+ 70 103  57	cloth_green 3
+ 82 123  69	cloth_green 4
+101 147  89	cloth_green 5
+120 171 111	cloth_green 6
+109  85  52	cloth_cream 0
+134 108  70	cloth_cream 1
+158 132  89	cloth_cream 2
+178 154 111	cloth_cream 3
+198 177 134	cloth_cream 4
+217 200 161	cloth_cream 5
+236 224 190	cloth_cream 6
+110  61  40	skin 0
+134  81  48	skin 1
+159 103  56	skin 2
+179 122  68	skin 3
+197 141  82	skin 4
+214 161 100	skin 5
+226 183 124	skin 6
+238 205 148	skin 7
+126 112  97	fur_white 0
+144 130 114	fur_white 1
+163 148 132	fur_white 2
+180 166 150	fur_white 3
+196 184 168	fur_white 4
+212 202 186	fur_white 5
+227 219 205	fur_white 6
+242 236 224	fur_white 7
+ 52  33  19	fur_brown 0
+ 66  42  24	fur_brown 1
+ 79  51  29	fur_brown 2
+ 93  62  34	fur_brown 3
+108  74  39	fur_brown 4
+123  87  45	fur_brown 5
+139 102  54	fur_brown 6
+155 117  63	fur_brown 7
+124  61  60	hide_pink 0
+145  75  70	hide_pink 1
+167  90  81	hide_pink 2
+185 107  94	hide_pink 3
+202 126 109	hide_pink 4
+217 146 125	hide_pink 5
+229 167 144	hide_pink 6
+240 188 164	hide_pink 7
+ 94  72  52	parchment 0
+125 101  75	parchment 1
+157 132 100	parchment 2
+188 167 132	parchment 3
+220 202 165	parchment 4
+237 225 197	parchment 5
+255 247 229	parchment 6
+111  71  25	wheat 0
+137  94  29	wheat 1
+163 117  32	wheat 2
+184 138  40	wheat 3
+201 158  52	wheat 4
+215 178  72	wheat 5
+225 197 104	wheat 6
+235 217 134	wheat 7
+139 129 120	smoke 0
+168 158 148	smoke 1
+196 186 176	smoke 2
+221 213 203	smoke 3
+239 233 225	smoke 4
+ 59  12  16	blood 0
+ 89  19  21	blood 1
+119  28  24	blood 2
+149  41  27	blood 3
+177  65  36	blood 4
+203  94  51	blood 5
+ 97  22  12	flame 0
+134  41  11	flame 1
+172  61   1	flame 2
+200  95   0	flame 3
+227 129   0	flame 4
+240 171  48	flame 5
+250 212  90	flame 6
+  9  42  75	glow_blue 0
+ 17  65 115	glow_blue 1
+ 31  92 157	glow_blue 2
+ 53 126 199	glow_blue 3
+104 169 229	glow_blue 4
+162 215 250	glow_blue 5
+ 32  58  24	glow_green 0
+ 42  87  36	glow_green 1
+ 51 119  52	glow_green 2
+ 62 157  75	glow_green 3
+101 195 117	glow_green 4
+152 233 165	glow_green 5
+ 41  75  92	ice 0
+ 52  96 117	ice 1
+ 64 117 143	ice 2
+ 83 140 166	ice 3
+104 163 189	ice 4
+127 186 210	ice 5
+154 206 226	ice 6
+180 226 242	ice 7
+ 55  65  21	reed 0
+ 70  86  30	reed 1
+ 85 108  40	reed 2
+101 131  50	reed 3
+118 153  60	reed 4
+136 175  77	reed 5
+157 195 105	reed 6
+178 214 132	reed 7
+ 29  19  13	walnut 0
+ 45  32  23	walnut 1
+ 62  46  33	walnut 2
+ 77  59  42	walnut 3
+ 93  73  51	walnut 4
+115  92  63	walnut 5
+137 113  76	walnut 6

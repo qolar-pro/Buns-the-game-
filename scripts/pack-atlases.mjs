@@ -19,7 +19,27 @@ import { join } from 'node:path';
 import { CATALOG } from './asset-catalog.mjs';
 
 const BUILD = 'assets-build';
+/**
+ * Hand-made art, which beats anything the generator made.
+ *
+ * Drop `assets-hand/<atlas>/<id>.png` in and it is packed instead of
+ * `assets-build/<atlas>/<id>.png`. Nothing else has to change: the id is the
+ * manifest key, the packer reads the real pixel size off the file, and the
+ * generator can keep producing the rest. That means the set can be replaced one
+ * sprite at a time rather than all at once, and a half-finished hand-drawn set
+ * still gives a game that runs.
+ *
+ * `assets-hand/` is committed. It is the only art in the repo a human made, so
+ * losing it would mean losing the one thing that cannot be regenerated.
+ */
+const HAND = 'assets-hand';
 const OUT_DIR = 'public/sprites';
+
+/** Hand-made file if there is one, else the generated one. */
+const pick = (atlas, id) => {
+  const hand = join(HAND, atlas, `${id}.png`);
+  return existsSync(hand) ? { file: hand, hand: true } : { file: join(BUILD, atlas, `${id}.png`), hand: false };
+};
 const PAD = 2; // transparent gutter, so bilinear sampling never bleeds neighbours
 const MAX_W = 2048;
 
@@ -53,16 +73,19 @@ const sizeOf = async (file) => {
   return { w: meta.width, h: meta.height };
 };
 
+let handCount = 0;
 for (const a of CATALOG) {
   if (a.sheet) continue; // handled below, as one packed sheet
-  const file = join(BUILD, a.atlas, `${a.id}.png`);
+  const { file, hand } = pick(a.atlas, a.id);
   if (!existsSync(file)) continue;
+  if (hand) handCount++;
   const { w, h } = await sizeOf(file);
   add(a.atlas, { id: a.id, file, w, h, cat: a.cat });
 }
 for (const id of SHEET_IDS) {
-  const file = join(BUILD, 'characters', `${id}.png`);
+  const { file, hand } = pick('characters', id);
   if (!existsSync(file)) continue;
+  if (hand) handCount++;
   const m = SHEET_META.get(id);
   const { w, h } = await sizeOf(file);
   // Rows are the four facings; the cell size falls out of the sheet.
@@ -155,6 +178,7 @@ export type AtlasName = (typeof ATLASES)[number];
 `);
 
 console.log(`\n${Object.keys(manifest).length} frames across ${byAtlas.size} atlases`);
+if (handCount) console.log(`${handCount} of them hand-made (from ${HAND}/)`);
 /**
  * Art payload ceiling.
  *
