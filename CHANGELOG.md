@@ -1,5 +1,105 @@
 # Survivors Juicy Buns - Change Log
 
+## [Version 0.5.0] — Hearthwood (2026-09-25)
+
+Every texture in the game, regenerated. Not retouched — replaced, by a
+deterministic generator that makes all 203 of them out of the same colour ramps
+under the same light.
+
+### Added
+- **The Hearthwood texture pipeline** (`tools/hearthwood/`). Materials are
+  painted as *index maps* — arrays of ramp steps — and only looked up in a
+  colour at the very end, so no script anywhere ever picks an RGB value. Ramps
+  are 7–9 steps built in OKLab, hue-shifted −6° at the darkest to +6° at the
+  lightest, floored at `#1c120b` and ceilinged at `#fff7e6`, with the chroma
+  boost weighted by existing chroma so greys stay grey. One final OKLab grade
+  runs over every texture in the game with identical parameters.
+- **`palettes.py`**, the colour source: the ten reference ramps verbatim plus 33
+  derived materials, each built by resampling anchor colours *in Lab* rather
+  than RGB.
+- **Seamless by construction.** All noise is periodic — wrapping value noise,
+  2–3 octaves, persistence 0.55 — so tiles have no cross-fade band where a
+  blend used to be. Verified by tiling 3×3 on every build, against the
+  texture's own strongest interior edge rather than an absolute threshold.
+- **Characters are one model, rotated.** Ellipsoid parts placed in 3D, turned
+  about the vertical axis per facing, painted back to front by depth, with a
+  procedural gait. The four rows of a sheet are the same model at 0/90/180/270°,
+  which is the only way to keep 15 characters consistent from every angle.
+- **A placement ghost.** Holding a placeable shows exactly where it will land:
+  green grid square for snapped pieces, footprint ellipse for free-placed props,
+  the item's sprite ghosted over it, red when the spot is blocked. Preview and
+  placement call the same `snapTo()`, so they cannot disagree.
+- **Held items**, drawn in hand and oriented to facing, with a grip per item
+  type — tools by the handle, blocks carried in front, a torch held up and out.
+- **One hit test for everything clickable** (`src/game/systems/picking.ts`):
+  mobs, NPCs, resources, props, dropped items, placed buildings. Candidates are
+  sorted in draw order so clicking overlapping objects picks the one on top.
+- **The contact sheet** (`docs/contact/hearthwood.png`): every asset labelled at
+  8× nearest-neighbour, every seamless tile at 3×3, and the ground materials
+  mapped onto isometric cubes so the light direction can be checked on three
+  faces at once.
+- **Buildings with real architecture** — staggered shingle courses, framed
+  windows with sills and mullions, recessed door panels, brick chimneys with a
+  lip, foundation courses, eave shadows and timber trim — at 128px rather than
+  the previous 32 and 64.
+- **`docs/IMPORT.md`**: point/nearest filtering, no compression, mipmaps off,
+  per engine, with the scale and tiling rules.
+- 45 new unit tests (185 total) over hit testing, held-item grips, the manifest,
+  prop drawing, and whether a new game can be started from where it puts you.
+
+### Fixed
+- **Seven out of ten new games could not be started.** The player always wakes
+  at world (0, 0), the climate field is reseeded per world, so the spawn biome
+  was whatever the noise happened to say — grassland only **28.6%** of the time,
+  measured over 5,000 seeds. Every tool in the game costs 3 wood and 2 sticks,
+  and wood comes from felling a tree, which needs an axe. Only the meadows
+  bootstrap that, with bushes, branches and loose rock in every chunk. Wake in
+  the Dust Flats, the White Waste or the Sunken Fen and bare hands get you plant
+  fibre, frost flowers or reeds: every tree answers "Requires an Axe", every
+  rock "Requires a Pickaxe", and the crafting tree cannot be entered at all
+  until you guess that the answer is to walk — a median of two chunks, up to
+  seven, with no map. The climate field is offset per world now until spawn and
+  its whole 3×3 neighbourhood are meadow. Worlds stay as varied and as
+  reproducible as before; measured the same way, the biome mix moves from
+  40/24/17/19 to 39/22/19/19.
+- **35 of the game's 52 entity types were never drawn.** `isWorldObject` tested
+  against a hardcoded list that had stopped tracking the entity union, so
+  everything added after it — most of the biome flora, the village props, the
+  dungeon furniture — was simulated, collided with, and invisible. Found by
+  taking a screenshot. 152 unit tests and 59 browser checks had all passed,
+  because every one of them asserts on game state.
+- **The click test had drifted from the draw sizes.** `picking.ts` kept its own
+  copy of how big each entity is drawn; husk, crawler and sentinel had since
+  changed, so the clickable area was not where the sprite was. Sizes are now
+  imported from the renderers and a test fails if they ever diverge again.
+- **Art and manifest disagreed on six assets' aspect ratios** — a torch
+  authored 60×110 and drawn 32×32 square was squashed to two-thirds height,
+  collider and all. Pixel size is now derived from the authored world size in
+  one direction, and the packer reads sizes back off the actual files, so the
+  two cannot drift.
+- **The snow tile's visible repeat** is gone; wrapping noise has no period to
+  see.
+- **Butterfly artifacts in the ground.** Tile orientation is varied by a hash of
+  world position to break up repetition, which turns any directional feature in
+  a tile into mirror seams. Ground tiles are isotropic now, and structured
+  surfaces (plank and stone floors) are exempt from rotation.
+- `GhostRenderer.isOccupied` assumed every object was 128px; it reads real
+  dimensions now.
+- A cobblestone seam at 128px, from computing region lighting off unwrapped
+  pixel centroids rather than wrapped Voronoi site positions.
+
+### Changed
+- Art payload **2.61 MB → 0.27 MB** for more assets at higher resolution. Not
+  compression: art made of nine colours compresses like nine colours.
+- Asset builds take **17 seconds, offline**. No model, no API token, no network,
+  and byte-identical output for the same input.
+- The Replicate pipeline is kept but no longer produces anything shipped.
+
+### Known limitations
+- The generator is Python (numpy, Pillow, scipy) and is not part of `npm
+  install`. A clone builds and runs the game without it — both
+  `assets-build/` and the packed atlases are committed.
+
 ## [Version 0.4.0] - The world (2026-09-17)
 
 Biomes to travel to, villages to spend loot in, bows to fight with, and a second

@@ -4,10 +4,10 @@
  * Moved out of components/Game.tsx. These write into the same key set the touch
  * layer synthesises into, so both input paths feed one set of systems.
  */
-import { SpriteColliderGenerator, type ColliderShape, type Point } from '../../../lib/SpriteCollider';
+import { type ColliderShape } from '../../../lib/SpriteCollider';
 import { soundManager } from '../../../lib/SoundManager';
 import { CHUNK_SIZE, PLAYER_SIZE } from '../core/config';
-import { idForEntity } from '../assets/colliders';
+import { applyPick, pickAt } from '../systems/picking';
 import { placeHeld } from '../systems/building';
 import type { AnimalType, EntityType, GameState, ItemType, Resource } from '../core/types';
 
@@ -46,6 +46,9 @@ export interface InputDeps {
  */
 /** Keys the update tick consumes once per press rather than reading as held. */
 const LATCHED_KEYS = new Set(['Space', 'KeyE', 'KeyR', 'KeyN', 'KeyF']);
+
+/** How far from the player a click can select something, in world units. */
+const CLICK_REACH = 600;
 
 export function createInputHandlers({
   state, keys, latched, colliders, canvas, refreshUI,
@@ -100,102 +103,16 @@ export function createInputHandlers({
       if (state.isInventoryOpen) {
         // Handled by React UI
       } else {
-        // Select resource in the world
+        // Everything clickable goes through one hit test: bounding box, then
+        // the sprite's own collider polygon, topmost first. It used to be
+        // written out here for resources and again for animals, with animals
+        // getting a different anchor convention and resources getting whichever
+        // one the chunk map yielded first.
         const worldX = x + state.camera.x;
         const worldY = y + state.camera.y;
-
-        // Check clickable reach
-        const px = state.player.x + PLAYER_SIZE / 2;
-        const py = state.player.y + PLAYER_SIZE / 2;
-        const distToPlayer = Math.sqrt(Math.pow(worldX - px, 2) + Math.pow(worldY - py, 2));
-        const clickableReach = 600;
-
-        if (distToPlayer < clickableReach) {
-          const pcx = Math.floor(worldX / CHUNK_SIZE);
-          const pcy = Math.floor(worldY / CHUNK_SIZE);
-        
-          let clickedResId: string | null = null;
-          let clickedAnimalId: string | null = null;
-
-          // Check animals first (they are usually on top)
-          for (const animal of state.animals) {
-            const { w, h, imgUrl, rows, cols: _cols, hasLabelCol: _hasLabelCol, hasLabelRow } = getAnimalSpriteInfo(animal.type);
-
-            const shape = colliders.get(imgUrl);
-            if (shape) {
-              const scaleX = w / shape.originalWidth;
-              const scaleY = h / shape.originalHeight;
-              const ax = animal.x - w / 2;
-              const ay = animal.y - h;
-
-              let relX = worldX - ax;
-              let relY = worldY - ay;
-            
-              const animRows = Math.max(1, hasLabelRow ? rows - 1 : rows);
-              if (animRows < 3 && animal.facing === 'left') relX = w - relX;
-
-              const localP: Point = {
-                x: relX / scaleX,
-                y: relY / scaleY
-              };
-            
-              if (SpriteColliderGenerator.isPointInPolygon(localP, shape.points)) {
-                clickedAnimalId = animal.id;
-                break;
-              }
-            } else {
-              // Fallback box
-              if (worldX >= animal.x - 20 && worldX <= animal.x + 20 && worldY >= animal.y - 20 && worldY <= animal.y + 20) {
-                clickedAnimalId = animal.id;
-                break;
-              }
-            }
-          }
-
-          if (!clickedAnimalId) {
-            for (let dx = -1; dx <= 1; dx++) {
-              for (let dy = -1; dy <= 1; dy++) {
-                const chunkId = `${pcx + dx},${pcy + dy}`;
-                const chunkResources = state.resources.get(chunkId);
-                if (chunkResources) {
-                  for (const res of chunkResources) {
-                    const dims = getResourceDimensions(res.type, res.scale, res.growthStage, res.rockIndex);
-                  
-                    // Check if within bounding box first
-                    if (worldX >= res.x && worldX <= res.x + dims.w && worldY >= res.y && worldY <= res.y + dims.h) {
-                      // Use sprite collider for precision if available
-                      let imgUrl = idForEntity(res.type as string, { growthStage: res.growthStage, rockIndex: res.rockIndex });
-
-                      const shape = colliders.get(imgUrl);
-                      if (shape) {
-                        const localP: Point = {
-                          x: (worldX - res.x) / (dims.w / shape.originalWidth),
-                          y: (worldY - res.y) / (dims.h / shape.originalHeight)
-                        };
-                        if (SpriteColliderGenerator.isPointInPolygon(localP, shape.points)) {
-                          clickedResId = res.id;
-                          break;
-                        }
-                      } else {
-                        // Fallback to box
-                        clickedResId = res.id;
-                        break;
-                      }
-                    }
-                  }
-                }
-                if (clickedResId) break;
-              }
-              if (clickedResId) break;
-            }
-          }
-          state.selectedResourceId = clickedResId;
-          state.selectedAnimalId = clickedAnimalId;
-        } else {
-          // Deselect if clicking too far
-          state.selectedResourceId = null;
-          state.selectedAnimalId = null;
-        }
+        applyPick(state, pickAt(state, worldX, worldY, {
+          colliders, getResourceDimensions, getAnimalSpriteInfo,
+        }, CLICK_REACH));
       }
     } else if (e.button === 2) {
       state.isRightMouseDown = true;
@@ -287,6 +204,15 @@ export function createInputHandlers({
     const x = Math.floor(((e.clientX - rect.left) / rect.width) * state.width);
     const y = Math.floor(((e.clientY - rect.top) / rect.height) * state.height);
     state.mousePos = { x, y };
+
+    // Hover highlights what a click would act on. Selection used to happen only
+    // on click, so the player found out what they had aimed at by swinging at
+    // it — and the renderer's targeted-object highlight had almost nothing to
+    // draw.
+    if (state.isInventoryOpen || state.talkingToId) return;
+    state.hoveredPick = pickAt(state, x + state.camera.x, y + state.camera.y, {
+      colliders, getResourceDimensions, getAnimalSpriteInfo,
+    }, CLICK_REACH);
   };
 
   const handleMouseUp = (e: MouseEvent) => {

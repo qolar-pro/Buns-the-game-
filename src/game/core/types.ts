@@ -286,6 +286,14 @@ export interface GameState {
   villagesFound: string[];
   /** Open trade partner, or null. Mirrors openChestId. */
   talkingToId: string | null;
+  /**
+   * What the pointer is over right now, from systems/picking.ts.
+   *
+   * Separate from `selectedResourceId`: selection is what a press will act on
+   * and survives the mouse moving away, hover is only what is under the
+   * pointer this instant. Conflating them made the highlight lie.
+   */
+  hoveredPick: { kind: string; id: string; distance: number } | null;
   /** Village request ids already handed in. */
   requestsDone: string[];
   level: { kind: 'surface' } | { kind: 'dungeon'; depth: 1 | 2 | 3; seed: number };

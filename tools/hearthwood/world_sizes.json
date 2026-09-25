@@ -1,0 +1,270 @@
+{
+  "world/tree": {
+    "w": 170,
+    "h": 255
+  },
+  "world/small_tree": {
+    "w": 110,
+    "h": 110
+  },
+  "world/trunk": {
+    "w": 95,
+    "h": 95
+  },
+  "world/workbench": {
+    "w": 115,
+    "h": 130
+  },
+  "world/furnace": {
+    "w": 115,
+    "h": 140
+  },
+  "world/furnace_lit": {
+    "w": 115,
+    "h": 140
+  },
+  "world/chest": {
+    "w": 100,
+    "h": 110
+  },
+  "world/chest_open": {
+    "w": 100,
+    "h": 110
+  },
+  "world/bed": {
+    "w": 130,
+    "h": 140
+  },
+  "world/antenna": {
+    "w": 130,
+    "h": 210
+  },
+  "world/fence": {
+    "w": 115,
+    "h": 90
+  },
+  "world/campfire_1": {
+    "w": 95,
+    "h": 95
+  },
+  "world/campfire_2": {
+    "w": 95,
+    "h": 95
+  },
+  "world/torch": {
+    "w": 60,
+    "h": 110
+  },
+  "world/coal_ore": {
+    "w": 110,
+    "h": 110
+  },
+  "world/iron_ore": {
+    "w": 110,
+    "h": 110
+  },
+  "world/copper_ore": {
+    "w": 110,
+    "h": 110
+  },
+  "world/titanium_ore": {
+    "w": 110,
+    "h": 110
+  },
+  "world/rubble": {
+    "w": 120,
+    "h": 120
+  },
+  "world/dungeon_entrance": {
+    "w": 150,
+    "h": 150
+  },
+  "world/dungeon_exit": {
+    "w": 100,
+    "h": 130
+  },
+  "world/stairs_down": {
+    "w": 120,
+    "h": 120
+  },
+  "world/loot_chest": {
+    "w": 110,
+    "h": 120
+  },
+  "world/brazier": {
+    "w": 80,
+    "h": 120
+  },
+  "world/wall": {
+    "w": 128,
+    "h": 150
+  },
+  "world/door": {
+    "w": 110,
+    "h": 150
+  },
+  "world/anvil": {
+    "w": 110,
+    "h": 110
+  },
+  "world/cactus": {
+    "w": 120,
+    "h": 180
+  },
+  "world/dead_bush": {
+    "w": 90,
+    "h": 90
+  },
+  "world/desert_rock": {
+    "w": 100,
+    "h": 100
+  },
+  "world/palm_tree": {
+    "w": 150,
+    "h": 225
+  },
+  "world/pine_tree": {
+    "w": 150,
+    "h": 225
+  },
+  "world/snow_rock": {
+    "w": 100,
+    "h": 100
+  },
+  "world/ice_shard": {
+    "w": 95,
+    "h": 95
+  },
+  "world/frost_flower": {
+    "w": 60,
+    "h": 60
+  },
+  "world/reeds": {
+    "w": 105,
+    "h": 105
+  },
+  "world/swamp_tree": {
+    "w": 145,
+    "h": 218
+  },
+  "world/bog_iron": {
+    "w": 100,
+    "h": 100
+  },
+  "world/glow_moss": {
+    "w": 70,
+    "h": 70
+  },
+  "world/village_house": {
+    "w": 230,
+    "h": 345
+  },
+  "world/village_hall": {
+    "w": 280,
+    "h": 420
+  },
+  "world/well": {
+    "w": 120,
+    "h": 120
+  },
+  "world/market_stall": {
+    "w": 150,
+    "h": 150
+  },
+  "world/signpost": {
+    "w": 90,
+    "h": 90
+  },
+  "world/lamppost": {
+    "w": 80,
+    "h": 120
+  },
+  "world/crate": {
+    "w": 95,
+    "h": 95
+  },
+  "world/barrel": {
+    "w": 85,
+    "h": 85
+  },
+  "world/crop_seedling": {
+    "w": 55,
+    "h": 55
+  },
+  "world/crop_growing": {
+    "w": 86,
+    "h": 86
+  },
+  "world/crop_wheat": {
+    "w": 100,
+    "h": 100
+  },
+  "world/bush": {
+    "w": 105,
+    "h": 105
+  },
+  "world/rock_a": {
+    "w": 92,
+    "h": 92
+  },
+  "world/rock_b": {
+    "w": 92,
+    "h": 92
+  },
+  "world/rock_c": {
+    "w": 92,
+    "h": 92
+  },
+  "world/sapling": {
+    "w": 55,
+    "h": 55
+  },
+  "world/tall_grass": {
+    "w": 70,
+    "h": 70
+  },
+  "world/flowers_a": {
+    "w": 64,
+    "h": 64
+  },
+  "world/flowers_b": {
+    "w": 64,
+    "h": 64
+  },
+  "world/pebbles": {
+    "w": 64,
+    "h": 64
+  },
+  "world/twigs": {
+    "w": 48,
+    "h": 48
+  },
+  "world/mushroom": {
+    "w": 64,
+    "h": 64
+  },
+  "world/hit_spark": {
+    "w": 64,
+    "h": 64
+  },
+  "world/leaf_burst": {
+    "w": 64,
+    "h": 64
+  },
+  "world/stone_chip": {
+    "w": 64,
+    "h": 64
+  },
+  "world/smoke_puff": {
+    "w": 64,
+    "h": 64
+  },
+  "world/water_splash": {
+    "w": 64,
+    "h": 64
+  },
+  "world/sleep_z": {
+    "w": 64,
+    "h": 64
+  }
+}

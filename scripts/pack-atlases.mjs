@@ -39,19 +39,37 @@ const add = (atlas, entry) => {
   byAtlas.get(atlas).push(entry);
 };
 
+/**
+ * Pixel size comes from the FILE, not from the catalogue.
+ *
+ * The catalogue used to be the authority, because generation needed to be told
+ * what to ask for. The generator is deterministic now and writes exactly the
+ * size it means, so trusting the catalogue only creates a second number that
+ * can disagree with the art — and a frame rectangle that disagrees with its
+ * image is a sprite drawn from the wrong part of the atlas.
+ */
+const sizeOf = async (file) => {
+  const meta = await sharp(file).metadata();
+  return { w: meta.width, h: meta.height };
+};
+
 for (const a of CATALOG) {
   if (a.sheet) continue; // handled below, as one packed sheet
   const file = join(BUILD, a.atlas, `${a.id}.png`);
   if (!existsSync(file)) continue;
-  add(a.atlas, { id: a.id, file, w: a.w, h: a.h, cat: a.cat });
+  const { w, h } = await sizeOf(file);
+  add(a.atlas, { id: a.id, file, w, h, cat: a.cat });
 }
 for (const id of SHEET_IDS) {
   const file = join(BUILD, 'characters', `${id}.png`);
   if (!existsSync(file)) continue;
   const m = SHEET_META.get(id);
+  const { w, h } = await sizeOf(file);
+  // Rows are the four facings; the cell size falls out of the sheet.
+  const rows = m.rows;
   add('characters', {
-    id, file, w: m.cols * m.cellW, h: m.rows * m.cellH, cat: 'sheet',
-    grid: { cols: m.cols, rows: m.rows, cellW: m.cellW, cellH: m.cellH },
+    id, file, w, h, cat: 'sheet',
+    grid: { cols: m.cols, rows, cellW: Math.round(w / m.cols), cellH: Math.round(h / rows) },
   });
 }
 

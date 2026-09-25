@@ -1,6 +1,6 @@
 {
   "name": "buns-the-game",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,9 +16,13 @@
     "test:loop": "node scripts/loop-test.mjs",
     "test:world": "node scripts/world-test.mjs",
     "audit:assets": "node scripts/audit-assets.mjs",
+    "assets:sizes": "node scripts/dump-world-sizes.mjs",
+    "assets:art": "cd tools/hearthwood && python3 build_all.py",
+    "assets:sheet": "cd tools/hearthwood && python3 contact_sheet.py",
+    "assets:pack": "node scripts/pack-atlases.mjs",
+    "assets:all": "npm run assets:sizes && npm run assets:art && npm run assets:pack && npm run assets:sheet && npm run audit:assets",
     "assets:generate": "node scripts/generate-all.mjs",
     "assets:process": "node scripts/process-asset.mjs",
-    "assets:pack": "node scripts/pack-atlases.mjs",
     "build:static": "STATIC_EXPORT=1 next build"
   },
   "dependencies": {

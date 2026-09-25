@@ -11,3 +11,6 @@ assets-src/
 
 # Static export output
 out/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo

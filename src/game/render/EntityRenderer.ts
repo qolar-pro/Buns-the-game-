@@ -25,8 +25,24 @@ export interface EntityRenderDeps {
   };
 }
 
-/** Draw size per mob, in world units. The Warden is meant to look like a wall. */
-const MOB_SIZE: Partial<Record<EnemyKind, number>> = {
+/**
+ * Draw size per mob, in world units. The Warden is meant to look like a wall.
+ *
+ * Exported because the hit test needs the same numbers: a hitbox built from a
+ * second copy of these drifts the moment one of them is tuned, and a hitbox
+ * that disagrees with the sprite is the most annoying kind of bug to play
+ * against — you can see the thing and cannot click it.
+ */
+export const DEFAULT_MOB_SIZE = 120;
+
+/** Draw size per villager role, in world units. Shared with the hit test. */
+export const NPC_SIZE: Record<NpcRole, number> = {
+  villager: 115,
+  trader: 115,
+  elder: 120,
+};
+
+export const MOB_SIZE: Partial<Record<EnemyKind, number>> = {
   husk: 130,
   crawler: 90,
   sentinel: 140,
@@ -168,7 +184,7 @@ export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
     const moving = enemy.state === 'chase';
     const frameX = moving ? Math.floor((Date.now() / 140) % cols) : 0;
 
-    const size = MOB_SIZE[enemy.type] ?? 120;
+    const size = MOB_SIZE[enemy.type] ?? DEFAULT_MOB_SIZE;
     ctx.drawImage(img, frameX * sw, frameY * sh, sw, sh, -size / 2, -size, size, size);
     return true;
   };
@@ -186,7 +202,7 @@ export function createEntityRenderer({ state, sprites }: EntityRenderDeps) {
     ctx.translate(npc.x, npc.y);
 
     const img = sprites.people[npc.role]?.() ?? null;
-    const size = npc.role === 'elder' ? 120 : 115;
+    const size = NPC_SIZE[npc.role];
 
     if (img) {
       const sheet = (FRAMES as Record<string, { grid?: { cols: number; rows: number } }>)[`characters/${npc.role}`];

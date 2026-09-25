@@ -122,6 +122,45 @@ Walls, floors and doors snap to a 128-unit grid so a row of them is actually a
 wall. Props — torches, workbenches, beds, furnaces, the anvil — are placed
 freely. Anything placed can be broken back into the item that made it.
 
+### The placement ghost
+
+Before you place anything you can see exactly where it will land. Holding a
+placeable shows a translucent preview at the target spot: a green square on the
+grid cell for anything that snaps, a footprint ellipse for anything placed
+freely, and the item's own sprite ghosted over it at 45% alpha. Red means the
+spot is blocked — occupied, out of reach, or overlapping a collider.
+
+The preview and the placement are the same code. `ghostTarget()` and
+`placeHeld()` both call `snapTo(rule, targetSpot(state), dims)`, so the ghost
+cannot promise a position the placement then rounds somewhere else. That was a
+real failure mode of the obvious implementation, where the renderer computed a
+preview position and the placement logic computed its own.
+
+### How the player holds things
+
+`src/game/systems/holding.ts`. What you are carrying is drawn in your hand,
+oriented to your facing, with the grip that suits it: a tool is held by the
+handle at an angle, a block is carried in front with both hands, a torch is
+held up and out, a bow across the body. The grips are a table keyed by item
+type, with a fallback per category.
+
+This replaced a rule that guessed an item's size from substrings of its name,
+which is the kind of thing that works for twelve items and silently mis-sizes
+the thirteenth.
+
+## Clicking on things
+
+One hit test, `src/game/systems/picking.ts`, for everything clickable — mobs,
+NPCs, resources, props, dropped items, placed buildings. `pickAt()` collects
+every candidate under the cursor and sorts them the way they are drawn,
+topmost first, so clicking overlapping objects selects the one you can actually
+see. `applyPick()` then does whatever that target does.
+
+The draw sizes it tests against are **imported from the renderers**, never
+copied. They were copied once, and three of them — husk, crawler, sentinel —
+had drifted far enough that you could not click the sprite you were looking at.
+A test now fails if the two ever disagree again.
+
 ## The survivor's logs
 
 Six fragments, found in chests, that say who was here before and why the Vault
@@ -146,6 +185,14 @@ never.
 Each gate is a material the combat tree needs, so travel is rewarded with
 capability rather than with a collectible. The fen has no villages in it: it is
 the one biome with no help, which is most of its character.
+
+**You always start in the meadows.** Not by chance — the climate field is
+offset per world until spawn and the whole chunk around it are grassland. The
+meadows are the only biome that bootstraps: every tool costs wood, wood comes
+from a tree, a tree needs an axe, and only grassland scatters the branches and
+loose rock that get you the first axe with your hands. The other three are
+places you travel to *with* tools, and waking up in one of them is not a
+harder start, it is a stopped one.
 
 ## Villages
 

@@ -11,6 +11,8 @@ import { CHUNK_SIZE, PLAYER_SIZE } from '../core/config';
 import { assets } from '../assets/AssetRegistry';
 import { drawLighting } from './LightingRenderer';
 import { drawFloatingTexts } from '../systems/feedback';
+import { heldPose } from '../systems/holding';
+import { drawPlacementGhost } from './GhostRenderer';
 import { drawWorldObject, isWorldObject } from './PropRenderer';
 import { FRAMES } from '../assets/frames';
 import { publishHud, toHotbar } from '../core/HudStore';
@@ -74,6 +76,9 @@ export interface RendererDeps {
 /** First cell of the player sheet, for the held-tool overlay. */
 const PLAYER_FRAME = FRAMES['characters/player'];
 
+/** Drawn size of a dropped item on the ground. Shared with the hit test. */
+export const ITEM_DRAW_SIZE = 40;
+
 export function createRenderer({
   state, sprites, colliders, chunkCanvases, anim, keys, canvas, view,
   debugColliders, renderChunkTerrain, getResourceDimensions, getAnimalSpriteInfo,
@@ -122,6 +127,10 @@ export function createRenderer({
         }
       }
     }
+
+    // The placement preview sits on the ground, under everything, so a block
+    // being placed behind a tree still shows where it will land.
+    drawPlacementGhost(ctx, state, getResourceDimensions);
 
     const visibleResources: RenderEntity[] = [];
     for (let cx = startCX; cx < endCX; cx++) {
@@ -262,7 +271,8 @@ export function createRenderer({
       } else if (e.isItem) {
         // Item on ground
         const hover = Math.sin(anim.value * 2 + e.x) * 3;
-        assets.draw(ctx, `items/${e.type}`, e.x - 20, e.y - 20 + hover, 40, 40);
+        assets.draw(ctx, `items/${e.type}`, e.x - ITEM_DRAW_SIZE / 2,
+                    e.y - ITEM_DRAW_SIZE / 2 + hover, ITEM_DRAW_SIZE, ITEM_DRAW_SIZE);
       } else if (e.isNpc) {
         drawNpc(ctx, ent as unknown as Npc);
       } else if (e.isEnemy) {
@@ -367,47 +377,25 @@ export function createRenderer({
             }
           }
 
-          // Draw held tool
+          // The held item, posed by systems/holding.ts.
+          //
+          // This used to be one rule for every object in the game: anything
+          // whose name contained "axe", "pickaxe" or "sword" was drawn at 100
+          // units, everything else at 50, all of it rotated 45 degrees. A
+          // lantern was swung like a sword and a loaf of bread was brandished.
           const selectedItem = p.inventory[p.selectedSlot];
           if (selectedItem) {
-            const isTool = selectedItem.type.includes('axe') || selectedItem.type.includes('pickaxe') || selectedItem.type.includes('sword');
-            const toolSize = isTool ? 100 : 50;
-            let toolX = p.x + PLAYER_SIZE / 2;
-            let toolY = p.y + PLAYER_SIZE / 2 + 10;
-            let rotation = 0;
-            let scaleX = 1;
-
-            if (p.facing === 'down') {
-              toolX += isTool ? 25 : 15;
-              toolY += isTool ? 25 : 15;
-              rotation = Math.PI / 4;
-            } else if (p.facing === 'up') {
-              toolX -= isTool ? 25 : 15;
-              toolY -= isTool ? 15 : 5;
-              rotation = -Math.PI / 4;
-            } else if (p.facing === 'right') {
-              toolX += isTool ? 35 : 25;
-              toolY += isTool ? 20 : 10;
-              rotation = Math.PI / 4;
-            } else if (p.facing === 'left') {
-              toolX -= isTool ? 35 : 25;
-              toolY += isTool ? 20 : 10;
-              rotation = Math.PI / 4;
-              scaleX = -1;
-            }
-
-            // Add swing animation if moving or clicking
-            if (keys.size > 0) {
-              rotation += Math.sin(anim.value * 10) * 0.2;
-            }
-
+            const pose = heldPose(selectedItem.type, p.facing ?? 'down',
+                                  p.x, p.y, PLAYER_SIZE);
             ctx.save();
-            ctx.translate(toolX, toolY);
-            if (scaleX === -1) {
-              ctx.scale(-1, 1);
-            }
-            ctx.rotate(rotation);
-            assets.draw(ctx, `items/${selectedItem.type}`, -toolSize / 2, -toolSize / 2, toolSize, toolSize);
+            ctx.translate(pose.x, pose.y);
+            // Mirror when facing left so the tool is held in the near hand.
+            if (p.facing === 'left') ctx.scale(-1, 1);
+            let angle = pose.angle;
+            if (keys.has('Space')) angle += Math.sin(anim.value * 10) * 0.25;
+            ctx.rotate(angle);
+            assets.draw(ctx, `items/${selectedItem.type}`,
+                        -pose.size / 2, -pose.size / 2, pose.size, pose.size);
             ctx.restore();
           }
 

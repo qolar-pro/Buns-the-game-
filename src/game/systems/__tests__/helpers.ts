@@ -55,6 +55,7 @@ export function makeState(slots: (InventorySlot | null)[] = []): GameState {
     lastShotAt: 0,
     villagesFound: [],
     talkingToId: null,
+    hoveredPick: null,
     requestsDone: [],
     progress: {
       daysSurvived: 0,

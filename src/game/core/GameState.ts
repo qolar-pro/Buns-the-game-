@@ -47,6 +47,7 @@ export function createGameState(): GameState {
     lastShotAt: 0,
     villagesFound: [],
     talkingToId: null,
+    hoveredPick: null,
     requestsDone: [],
     level: { kind: 'surface' },
     progress: {

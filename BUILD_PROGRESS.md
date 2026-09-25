@@ -169,12 +169,12 @@ Raw audit output: `docs/audit-baseline.txt`.
 | Files over 500 lines | 1 | **0** | 0 |
 | Referenced PNGs missing | **33 of 61** | **0** | 0 |
 | Unused PNGs | 0 | 0 | 0 |
-| Art payload | 6.75 MB / 37 files | **1.09 MB / 5 atlases** | < 2.5 MB, ≤ 5 |
+| Art payload | 6.75 MB / 37 files | **0.27 MB / 5 atlases** (203 frames) | < 3.5 MB, ≤ 5 |
 | HTTP image requests at load | ~37 | **5** | ≤ 5 |
 | `useRef<HTMLImageElement>` | 34 | **0** | 0 |
 | `: any` / `@ts-ignore` | 8 / 0 | **0 / 0** | 0 |
 | Stray `console.*` | 11 | **0** | 0 |
-| Tests | 0 | **44** | inventory, crafting, smelting, noise |
+| Tests | 0 | **185** | inventory, crafting, smelting, noise, picking, grips, manifest, bootstrap |
 | Touch support | none | full layer, verified harvesting | playable |
 | Save schema | unversioned blob | versioned + migration chain, IndexedDB | migrates v0 |
 | `npm run build` | passed with lint skipped | **passes with ESLint + TypeScript enforced** | enforced |
@@ -186,7 +186,7 @@ Engine modules under `src/game/`: **38**.
 
 | Suite | Result | Covers |
 |---|---|---|
-| `npm test` | 44 passing | inventory, crafting, smelting, noise determinism, save migration |
+| `npm test` | 185 passing | inventory, crafting, smelting, noise determinism, save migration, hit testing, held-item grips, asset manifest |
 | `node scripts/smoke-test.mjs` | 12/12 | boot, world render, movement, harvesting yields drops, inventory, crafting, hotbar, pause, save, 404s, page errors |
 | `node scripts/mobile-test.mjs` | 10/10 | touch layer, stick moves the player, action button harvests, sheets, frame time under 4x CPU throttle, portrait gate |
 | `node scripts/audit-assets.mjs` | 0 missing, 0 unused | every PNG reference against `public/` |
@@ -317,6 +317,89 @@ a test passes on a game nobody can play.
     walks every entity type and asks the exact question the renderer asks; it
     was checked against the old predicate to confirm it fails on it.
 
+### Found during the art rebuild
+
+26. **Seven in ten new games opened unplayable.** The player wakes at world
+    (0, 0); the climate field is reseeded per world; so the spawn biome was
+    whatever the noise said. Grassland 28.6% of the time over 5,000 seeds.
+
+    That is not cosmetic, because the meadows are the only biome that
+    bootstraps. Every tool costs 3 wood and 2 sticks; wood comes from a tree;
+    a tree needs an axe. Grassland scatters branches and loose rock in every
+    chunk, so the first minute works. The other three scatter things that are
+    gated behind the tools you do not have yet — in the White Waste every pine
+    says "Requires an Axe" and every rock "Requires a Pickaxe", and the only
+    thing bare hands take is a frost flower. The player had to guess that the
+    answer was to walk, median two chunks and up to seven, with no map.
+
+    `reachability.test.ts` did not catch it and structurally could not: it asks
+    whether every item is obtainable *somewhere*, closing over every biome at
+    once, which is exactly the right question for "is the ending reachable" and
+    the wrong one for "can the player do anything yet". The new
+    `world/__tests__/bootstrap.test.ts` asks the local question instead —
+    standing where the game puts you, with empty hands, can you reach the first
+    tool — and was checked against the unfixed generator to confirm it fails
+    on it.
+
+    Found by a smoke-test check that failed one run in four and looked like a
+    flake. It was not a flake; it was the 71%, sampled.
+
+    Fixed by offsetting the climate field per world until spawn and its whole
+    3×3 neighbourhood are meadow. The biome table already said grassland is
+    home and the rest are somewhere you travel to; now you start at home.
+    Measured the same way, the world-wide biome mix moves 40/24/17/19 →
+    39/22/19/19, so nothing about the map is flattened — only which part of it
+    the origin lands on.
+
+20. **The click test had drifted from the draw sizes.** Hit testing kept its own
+    copy of how big each entity is drawn, written by copying the numbers out of
+    the renderer. The renderer's numbers then changed. Husk, crawler and
+    sentinel were all clickable somewhere other than where their sprite was —
+    and the closer you stood, the further off it got. `picking.ts` imports the
+    sizes now, and a test fails if the two ever hold different numbers again.
+
+21. **Art and the manifest disagreed about six assets' shapes.** The generator
+    was told pixel sizes by hand; the manifest separately authored world sizes.
+    A torch authored 60×110 and drawn into a 32×32 frame came out squashed to
+    two-thirds its height, with its collider squashed to match, and looked
+    merely "a bit off" rather than broken. Pixel size is derived from the
+    authored world size now (`dump-world-sizes.mjs` → `world_sizes.json`), and
+    the packer reads sizes back off the files it packs, so there is only one
+    number and it flows one way.
+
+22. **Ground tiles grew butterfly wings.** Tile orientation is varied by a hash
+    of world position to break up the repeat — which silently requires the tile
+    to be isotropic, because flipping anything with a direction in it puts the
+    light on the wrong side and mirrors the feature against its neighbour. The
+    first pass of terrain had directional ripples in it. Ground tiles are
+    high-frequency only now, and `structured` exempts plank and stone floors
+    from rotation entirely.
+
+23. **`GhostRenderer.isOccupied` assumed everything was 128 pixels**, so the
+    placement preview said "blocked" over empty ground next to anything taller,
+    and "clear" over part of anything wider. It reads real dimensions now.
+
+24. **The seam check passed everything.** The first version compared a tile's
+    edge against an absolute threshold, which is a catastrophe on smooth sand
+    and invisible on cobblestone — so it reported success on textures with
+    obvious seams. It measures against the texture's own strongest interior
+    edge now, and was validated against three deliberately-broken control tiles
+    before being trusted. The first "broken" control I wrote was not actually
+    broken, which is how the metric got a second look.
+
+25. **Declumping depended on scan order.** Ties were broken by neighbour
+    *position*, so a sprite and its mirror resolved differently and a
+    character's left side stopped matching their right. Ties break by neighbour
+    *value* now.
+
+    Chasing that one is also how the real answer to "why don't the left and
+    right facings match?" turned up: they are not supposed to. The geometry is
+    mirrored — which is now tested, across every frame of all 15 sheets, via an
+    exported `silhouette()` — but the shading is not, because the sun does not
+    move when the character turns around. Three of my four "fixes" were fixing
+    a correct behaviour. The two that were real bugs are the tie-break above and
+    a lean shear that sheared the same way regardless of facing.
+
 ## Not done
 
 - **A tree still pops rather than falling and fading**, and there is no
@@ -346,5 +429,5 @@ a test passes on a game nobody can play.
   spawn density across a border, but the terrain pass does not use it, so grass
   meets marsh on a razor edge. The same mistake the per-chunk blight flag made,
   in a different place.
-- **The snow tile repeats visibly**, the same motif on a grid. It is the one
-  terrain tile that did not come out seamless enough to hide its period.
+- ~~**The snow tile repeats visibly**~~ — fixed by the Hearthwood rebuild. All
+  noise is periodic now, so there is no period left to see.
