@@ -121,6 +121,51 @@ All 43 ramps are in `tools/hearthwood/palettes.py` if you want the rest.
 
 ---
 
+## Start here
+
+Do **not** work through the tables below in order. They are reference, not a
+plan — 203 sprites is a project, and most of them are things the player sees
+once an hour.
+
+These twelve are what is on screen in the first minute of a new game. Drawing
+just these changes how the whole game looks, and the game stays perfectly
+playable throughout because everything else keeps its generated art.
+
+| # | id | why it is first |
+|---|---|---|
+| 1 | `terrain/grass` | The ground under almost everything. Changes the look of the game more than any other single file. |
+| 2 | `characters/player` | On screen 100% of the time. The hardest one (12 cells) but the highest payoff. |
+| 3 | `world/tree` | The first thing you are told to chop. |
+| 4 | `world/bush` | The other starting wood source. |
+| 5 | `world/twigs` | Scattered in every meadow chunk. This is what the game calls a "branch". |
+| 6 | `world/pebbles` | Ground detail, everywhere. |
+| 7 | `world/tall_grass` | Ground detail, everywhere. Thin — give it a dark side and a light side, no outline. |
+| 8 | `world/rock_a` | The stone source. |
+| 9 | `items/wood` | First item you ever pick up. |
+| 10 | `items/stone` | Second item you ever pick up. |
+| 11 | `items/wooden_axe` | First thing you craft. |
+| 12 | `items/wooden_pickaxe` | Second thing you craft. |
+
+After those, in rough order of how often they are seen: the other ore rocks,
+the workbench and campfire, the remaining starting-tier items, the villagers and
+livestock, then the biome flora, then everything else.
+
+**The id is not always the name the game uses for the thing.** A few entities
+draw from a differently-named sprite — a `branch` draws as `world/twigs`, a
+`small_rock` shares the rock art, a young `tree` draws as
+`world/small_tree`. The tables below list the *sprite* ids, which are the
+filenames. If you cannot find something by the name you expect, search the table
+for what it looks like rather than inventing a filename; an invented one is
+silently ignored.
+
+**Leave the character sheets until last except for the player.** They are twelve
+cells each and have to stay consistent across all of them, which is much harder
+than a single icon. If the walk cycle is too fiddly, draw the four standing
+poses (column 1 of each row) and copy them across the other columns — a
+character that does not animate looks far better than one that wobbles.
+
+---
+
 ## Setting up the editor
 
 The palette is exported as files so nothing has to be retyped:

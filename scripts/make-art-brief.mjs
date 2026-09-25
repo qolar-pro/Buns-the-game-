@@ -184,6 +184,75 @@ for (const n of SHOW) if (RAMPS[n]) md += `| \`${n}\` | ${ramp(n)} |\n`;
 md += `\nOutline colour, used by everything: \`#1c120b\`. Never pure black, never\npure white — the palette floor is \`#1c120b\` and the ceiling \`#fff7e6\`.\n\n`;
 md += `All ${Object.keys(RAMPS).length} ramps are in \`tools/hearthwood/palettes.py\` if you want the rest.\n\n---\n\n`;
 
+// What to draw first. Hand-drawing 203 sprites is a project; hand-drawing the
+// twelve things visible in the first minute is an afternoon, and it changes how
+// the whole game looks.
+const FIRST = [
+  ['terrain/grass', 'The ground under almost everything. Changes the look of the game more than any other single file.'],
+  ['characters/player', 'On screen 100% of the time. The hardest one (12 cells) but the highest payoff.'],
+  ['world/tree', 'The first thing you are told to chop.'],
+  ['world/bush', 'The other starting wood source.'],
+  ['world/twigs', 'Scattered in every meadow chunk. This is what the game calls a "branch".'],
+  ['world/pebbles', 'Ground detail, everywhere.'],
+  ['world/tall_grass', 'Ground detail, everywhere. Thin — give it a dark side and a light side, no outline.'],
+  ['world/rock_a', 'The stone source.'],
+  ['items/wood', 'First item you ever pick up.'],
+  ['items/stone', 'Second item you ever pick up.'],
+  ['items/wooden_axe', 'First thing you craft.'],
+  ['items/wooden_pickaxe', 'Second thing you craft.'],
+];
+
+// The list above is hand-curated, so it is the one part of this file that can
+// rot. Two of its entries already did: the game spawns entities called `branch`
+// and `small_rock`, but those draw as `world/twigs` and `world/rock_a` — an
+// agent told to draw `branch.png` would have hunted for a file that does not
+// exist. Check it here rather than shipping a plan that points at nothing.
+const known = new Set(rows.map((r) => `${r.atlas}/${r.id}`));
+const bogus = FIRST.filter(([k]) => !known.has(k)).map(([k]) => k);
+if (bogus.length) {
+  console.error(`Priority list names ${bogus.length} sprite(s) that do not exist:`);
+  for (const k of bogus) console.error(`  ${k}`);
+  console.error('Fix FIRST in this script. Entity names and asset ids are not always the same');
+  console.error('— see idForEntity() in src/game/assets/colliders.ts.');
+  process.exit(1);
+}
+
+md += `## Start here
+
+Do **not** work through the tables below in order. They are reference, not a
+plan — 203 sprites is a project, and most of them are things the player sees
+once an hour.
+
+These twelve are what is on screen in the first minute of a new game. Drawing
+just these changes how the whole game looks, and the game stays perfectly
+playable throughout because everything else keeps its generated art.
+
+| # | id | why it is first |
+|---|---|---|
+${FIRST.map(([k, why], i) => `| ${i + 1} | \`${k}\` | ${why} |`).join('\n')}
+
+After those, in rough order of how often they are seen: the other ore rocks,
+the workbench and campfire, the remaining starting-tier items, the villagers and
+livestock, then the biome flora, then everything else.
+
+**The id is not always the name the game uses for the thing.** A few entities
+draw from a differently-named sprite — a \`branch\` draws as \`world/twigs\`, a
+\`small_rock\` shares the rock art, a young \`tree\` draws as
+\`world/small_tree\`. The tables below list the *sprite* ids, which are the
+filenames. If you cannot find something by the name you expect, search the table
+for what it looks like rather than inventing a filename; an invented one is
+silently ignored.
+
+**Leave the character sheets until last except for the player.** They are twelve
+cells each and have to stay consistent across all of them, which is much harder
+than a single icon. If the walk cycle is too fiddly, draw the four standing
+poses (column 1 of each row) and copy them across the other columns — a
+character that does not animate looks far better than one that wobbles.
+
+---
+
+`;
+
 md += `## Setting up the editor
 
 The palette is exported as files so nothing has to be retyped:
